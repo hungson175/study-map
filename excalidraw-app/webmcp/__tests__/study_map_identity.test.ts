@@ -7,7 +7,7 @@ const root = path.resolve(import.meta.dirname, "../../..");
 const read = (relative: string) =>
   fs.readFileSync(path.join(root, relative), "utf8");
 const VERSION_B_PROMPT =
-  "Open Study Map in your built-in browser, call how_to_use first, and map what I am learning with me.";
+  "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help me study using study-map";
 
 describe("Study Map public identity", () => {
   it("mounts the study registration before the two retained seed surfaces", () => {
@@ -96,6 +96,13 @@ describe("Study Map public identity", () => {
     expect(shell).toContain('from "../study/study_map_prompt"');
     expect(panel).not.toContain(VERSION_B_PROMPT);
     expect(shell).not.toContain(VERSION_B_PROMPT);
+    expect(panel).toContain(
+      "Attach your material in ChatGPT, then paste this message.",
+    );
+    expect(panel).not.toMatch(/Sol|Terra|Luna/u);
+    expect(read("README.md")).toContain(
+      "Use ChatGPT Codex with the Sol or Terra model. Luna does not support this WebMCP page yet.",
+    );
     const publicPromptCopy = [prompt, panel, shell, read("README.md")].join(
       "\n",
     );

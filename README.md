@@ -6,11 +6,15 @@ Learn anything as a map you and ChatGPT draw together. Pin a question mark to a 
 
 ## The study loop
 
-1. Copy the start prompt into ChatGPT Codex using Sol or Terra, or open the canvas directly for hand editing.
+1. Attach your material in ChatGPT, then copy the start message from Study Map, or open the canvas directly for hand editing.
 2. ChatGPT calls `how_to_use` first, reads the attachment itself, and draws a small study map.
 3. Select a node and pin a question with **? Ask about selected node**.
 4. ChatGPT calls `list_questions` and `answer_question`; the answer lands under that node as ordinary undoable elements.
 5. Correct the map by hand and continue with another question.
+
+## Compatibility
+
+Use ChatGPT Codex with the Sol or Terra model. Luna does not support this WebMCP page yet.
 
 The page does not accept a topic, pasted text, or PDF. Study Map has no backend of its own. Saved map copies remain in the browser unless the person shares or exports them; bounded WebMCP tool results go to the model provider when the agent invokes them.
 

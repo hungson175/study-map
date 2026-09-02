@@ -113,7 +113,7 @@ describe("Study Map study-question controller", () => {
     ]);
     expect(tools[0]).toMatchObject({
       description:
-        "Start here before any other tool. What this page is, what the person can do by hand, and what to do next given what is on the canvas right now.",
+        "READ ME FIRST. Call this before any other tool every time the page opens. Explain Study Map, orient the person to an existing map, and guide the next step from the live canvas state.",
       annotations: { readOnlyHint: true },
     });
     expect(tools.map(({ annotations }) => annotations.readOnlyHint)).toEqual([
@@ -190,9 +190,9 @@ describe("Study Map study-question controller", () => {
       what_this_is:
         "A canvas where you and the person build a map of whatever they are learning. You draw it, they correct it by hand, and their questions live on the map.",
       next_step:
-        "Ask what they are learning. If they have a paper, article or notes, ask them to attach it to this chat; you read it yourself, this page does not. Then draw a small first map, five nodes at most, with short labels, and stop so they can react.",
+        "Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Draw a small first map, five nodes at most, with short labels, and stop so they can react.",
       say_to_user:
-        "Tell me what you're learning, or attach a paper, and I'll draw it as a map on this page. Move anything by hand, and put a ? on whatever you want me to dig into.",
+        "This is Study Map: tell me what you're learning or attach your material here, and I'll draw a small mind map that you can move, edit, undo, and question by hand.",
     });
 
     const waitingGuide = waiting as unknown as {
@@ -200,20 +200,22 @@ describe("Study Map study-question controller", () => {
       say_to_user: string;
     };
     expect(waitingGuide.next_step).toBe(
-      "Read the open questions, research them yourself, then write a short answer as a connected shape under the node that was asked about, and add the source. Do not answer in chat only.",
+      "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, write a short sourced answer as a connected shape under the node; do not answer in chat only.",
     );
     expect(waitingGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
-    expect(waitingGuide.say_to_user).toMatch(/answer.*under that node/i);
+    expect(waitingGuide.say_to_user).toMatch(
+      /orient.*research.*under that node/i,
+    );
 
     const mapGuide = map as unknown as {
       next_step: string;
       say_to_user: string;
     };
     expect(mapGuide.next_step).toBe(
-      "Invite them to check it, drag it, rewrite it or undo it, then continue from their version.",
+      "Call get_chart, give the person a short orientation to the map that is already here, explain that they can drag, edit, delete or undo anything, and ask what they want to understand, change or question next.",
     );
-    expect(mapGuide.say_to_user).toMatch(/map is ready/i);
-    expect(mapGuide.say_to_user).toMatch(/drag or rewrite/i);
+    expect(mapGuide.say_to_user).toMatch(/existing Study Map/i);
+    expect(mapGuide.say_to_user).toMatch(/orient.*understand.*question next/i);
 
     const answeredGuide = answered as unknown as {
       state: string;
@@ -221,7 +223,9 @@ describe("Study Map study-question controller", () => {
     };
     expect(answeredGuide.state).toBe("map");
     expect(answeredGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
-    expect(answeredGuide.say_to_user).toMatch(/check it.*drag or rewrite/i);
+    expect(answeredGuide.say_to_user).toMatch(
+      /orient.*understand.*question next/i,
+    );
 
     for (const result of [empty, map, waiting, answered]) {
       const guide = result as unknown as {
@@ -244,7 +248,7 @@ describe("Study Map study-question controller", () => {
 
     expect(controller.listTools()[0]).toMatchObject({
       description:
-        "Start here before any other tool. What this page is, what the person can do by hand, and what to do next given what is on the canvas right now.",
+        "READ ME FIRST. Call this before any other tool every time the page opens. Explain Study Map, orient the person to an existing map, and guide the next step from the live canvas state.",
       annotations: { readOnlyHint: true },
     });
     await expect(

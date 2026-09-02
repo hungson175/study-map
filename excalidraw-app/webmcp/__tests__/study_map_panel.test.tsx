@@ -19,7 +19,7 @@ import { RetrofitPanel } from "../RetrofitPanel";
 import { WEBMCP_TOOL_ACTIVITY_EVENT } from "../tool_activity";
 
 const VERSION_B_PROMPT =
-  "Open Study Map in your built-in browser, call how_to_use first, and map what I am learning with me.";
+  "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help me study using study-map";
 
 const studyToolNames = [
   "how_to_use",
@@ -129,20 +129,17 @@ describe("Study Map panel", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "What are you learning today?" }),
+      screen.getByRole("heading", { name: "Learn as a map." }),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Learn anything as a map you and ChatGPT draw together.",
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Tell ChatGPT what you are learning — attach a paper or notes if you have them. Study Map is the canvas it can draw on with you.",
+        "Attach your material in ChatGPT, then paste this message.",
       ),
     ).toBeTruthy();
     expect(screen.getByText(VERSION_B_PROMPT)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy message" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Study Map" })).toBeTruthy();
+    expect(screen.queryByText(/Sol|Terra|Luna/u)).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.queryByText(/Drop a PDF/i)).toBeNull();
@@ -171,7 +168,7 @@ describe("Study Map panel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
     expect(writeText).toHaveBeenCalledWith(VERSION_B_PROMPT);
     expect(fixture.updateScene).not.toHaveBeenCalled();
@@ -198,7 +195,7 @@ describe("Study Map panel", () => {
       );
     });
     expect(
-      screen.queryByRole("heading", { name: "What are you learning today?" }),
+      screen.queryByRole("heading", { name: "Learn as a map." }),
     ).toBeNull();
     expect(fixture.updateScene).not.toHaveBeenCalled();
     expect(fixture.api.getFiles).not.toHaveBeenCalled();
@@ -233,7 +230,7 @@ describe("Study Map panel", () => {
       });
     }
     expect(
-      screen.getByRole("heading", { name: "What are you learning today?" }),
+      screen.getByRole("heading", { name: "Learn as a map." }),
     ).toBeTruthy();
     expect(fixture.updateScene).not.toHaveBeenCalled();
     expect(fixture.api.getFiles).not.toHaveBeenCalled();
@@ -271,7 +268,7 @@ describe("Study Map panel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Copy unavailable"),
     );
@@ -460,7 +457,7 @@ describe("Study Map panel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
     expect(writeText.mock.calls[0][0]).toBe(VERSION_B_PROMPT);
@@ -478,7 +475,7 @@ describe("Study Map panel", () => {
         controller={makeController() as never}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
     expect(screen.getByRole("status")).toHaveTextContent("Copy unavailable");
     first.unmount();
 
@@ -495,7 +492,7 @@ describe("Study Map panel", () => {
         controller={makeController() as never}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Copy unavailable"),
     );

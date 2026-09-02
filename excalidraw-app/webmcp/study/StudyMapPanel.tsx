@@ -323,8 +323,7 @@ export const StudyMapPanel = ({
             <p className="study-map__wordmark">Study Map</p>
             <h1 id="study-map-welcome-title">Learn as a map.</h1>
             <p className="study-map__start-explainer">
-              Attach your material in ChatGPT, then paste this into Codex (Sol
-              or Terra; Luna is not supported yet).
+              Attach your material in ChatGPT, then paste this message.
             </p>
             <p className="study-map__start-prompt">{STUDY_MAP_START_PROMPT}</p>
             <div className="study-map__welcome-actions">

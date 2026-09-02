@@ -82,6 +82,13 @@
   font-size: 1rem;
 }
 
+.study-map__start-label {
+  margin: 0 0 0.45rem;
+  color: #27223b;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .study-map__start-prompt {
   max-width: 40rem;
   margin: 0 0 1rem;
@@ -94,10 +101,27 @@
   user-select: text;
 }
 
-.study-map__welcome-card > button {
-  border-color: transparent;
-  background: #6965db;
-  color: white;
+.study-map__model-note {
+  margin: -0.25rem 0 1rem;
+  color: #666075;
+  font-size: 0.84rem;
+}
+
+.study-map__welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+
+  button:first-child {
+    border-color: transparent;
+    background: #6965db;
+    color: white;
+  }
+
+  button:last-child {
+    border-color: #6965db;
+    color: #514dc4;
+  }
 }
 
 .study-map__question-panel {

@@ -326,13 +326,24 @@ export const StudyMapPanel = ({
               Learn anything as a map you and ChatGPT draw together.
             </p>
             <p className="study-map__start-explainer">
-              Tell ChatGPT what you are learning — attach a paper or notes if
-              you have them. Study Map is the canvas it can draw on with you.
+              Attach your paper in ChatGPT if you have one. Study Map is the
+              canvas you and ChatGPT can draw and edit together.
+            </p>
+            <p className="study-map__start-label">
+              Copy this into ChatGPT Codex
             </p>
             <p className="study-map__start-prompt">{STUDY_MAP_START_PROMPT}</p>
-            <button type="button" onClick={() => void copyTalkPrompt()}>
-              Copy prompt
-            </button>
+            <p className="study-map__model-note">
+              Use Sol or Terra. Luna does not support this WebMCP page yet.
+            </p>
+            <div className="study-map__welcome-actions">
+              <button type="button" onClick={() => void copyTalkPrompt()}>
+                Copy prompt
+              </button>
+              <button type="button" onClick={() => setWelcomeOpen(false)}>
+                Open Study Map
+              </button>
+            </div>
           </div>
         </section>
       ) : null}

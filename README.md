@@ -6,7 +6,7 @@ Learn anything as a map you and ChatGPT draw together. Pin a question mark to a 
 
 ## The study loop
 
-1. Copy the start prompt from Study Map and tell ChatGPT what you are learning — attach a paper or notes in the same chat if you have them.
+1. Copy the start prompt into ChatGPT Codex using Sol or Terra, or open the canvas directly for hand editing.
 2. ChatGPT calls `how_to_use` first, reads the attachment itself, and draws a small study map.
 3. Select a node and pin a question with **? Ask about selected node**.
 4. ChatGPT calls `list_questions` and `answer_question`; the answer lands under that node as ordinary undoable elements.

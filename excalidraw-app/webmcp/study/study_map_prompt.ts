@@ -1,2 +1,2 @@
 export const STUDY_MAP_START_PROMPT =
-  "Open Study Map in your built-in browser, call how_to_use first, and map what I am learning with me.";
+  "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help me study and guide me through the map.";

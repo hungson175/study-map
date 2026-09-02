@@ -257,23 +257,23 @@ export const createStudyQuestionController = (
     const guidance = {
       empty: {
         next_step:
-          "Ask what they are learning. If they have a paper, article or notes, ask them to attach it to this chat; you read it yourself, this page does not. Then draw a small first map, five nodes at most, with short labels, and stop so they can react.",
+          "Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Draw a small first map, five nodes at most, with short labels, and stop so they can react.",
         say_to_user:
-          "Tell me what you're learning, or attach a paper, and I'll draw it as a map on this page. Move anything by hand, and put a ? on whatever you want me to dig into.",
+          "This is Study Map: tell me what you're learning or attach your material here, and I'll draw a small mind map that you can move, edit, undo, and question by hand.",
       },
       map: {
         next_step:
-          "Invite them to check it, drag it, rewrite it or undo it, then continue from their version.",
+          "Call get_chart, give the person a short orientation to the map that is already here, explain that they can drag, edit, delete or undo anything, and ask what they want to understand, change or question next.",
         say_to_user: answeredTargetLabel
-          ? `I added an answer under “${answeredTargetLabel}” — check it, drag or rewrite it if you like, then tell me what to explore next.`
-          : "Your map is ready — drag or rewrite anything, then put a ? on the next node you want me to dig into.",
+          ? `I found an existing Study Map with an answer under “${answeredTargetLabel}”; I'll orient you to what's here, then ask what you want to understand, change, or question next.`
+          : "I found an existing Study Map; I'll read it first and give you a quick orientation, then ask what you want to understand, change, or question next.",
       },
       waiting: {
         next_step:
-          "Read the open questions, research them yourself, then write a short answer as a connected shape under the node that was asked about, and add the source. Do not answer in chat only.",
+          "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, write a short sourced answer as a connected shape under the node; do not answer in chat only.",
         say_to_user: openTargetLabel
-          ? `You asked about “${openTargetLabel}” — I'll research it and put the answer under that node.`
-          : "I found your open question — I'll research it and put the answer under that node.",
+          ? `I found your existing map and an open question on “${openTargetLabel}”; I'll orient you to the map first, then we can research it and place the answer under that node.`
+          : "I found an existing map with an open question; I'll orient you to what's here first, then we can research it and place the answer on the map.",
       },
     }[state];
     checkAbort(context.signal);
@@ -297,7 +297,7 @@ export const createStudyQuestionController = (
       next_step: guidance.next_step,
       say_to_user: guidance.say_to_user,
       tools: [
-        "how_to_use: call first and after the map changes",
+        "how_to_use: READ ME FIRST every time this page opens and after the map changes",
         "get_chart: read the bounded live outline",
         "get_selection: inspect selected study nodes",
         "list_questions: find open question marks",
@@ -636,7 +636,7 @@ export const createStudyQuestionController = (
     {
       name: "how_to_use",
       description:
-        "Start here before any other tool. What this page is, what the person can do by hand, and what to do next given what is on the canvas right now.",
+        "READ ME FIRST. Call this before any other tool every time the page opens. Explain Study Map, orient the person to an existing map, and guide the next step from the live canvas state.",
       inputSchema: toolSchema({}, []),
       annotations: { readOnlyHint: true },
       execute: howToUse,

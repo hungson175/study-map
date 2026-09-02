@@ -18,7 +18,7 @@ The welcome stores pasted text and PDF metadata only in local page state in this
 
 Study Map publishes page-owned operations through [`document.modelContext.registerTool`](https://github.com/webmachinelearning/webmcp). The five study tools are `how_to_use`, `get_chart`, `get_selection`, `list_questions`, and `answer_question`. The inherited scene and local canvas lifecycle tools remain available for composing and saving maps.
 
-The page reports the tool count observed from the browser rather than asserting a static number. Native discovery and invocation on this exact public origin remain unproven until the own-origin gate is run.
+Native discovery and invocation are verified on this live origin in Codex Desktop 0.152.0, model Sol, through its built-in `iab` browser: 16 tools were observed (not a cap); a question was pinned; `list_questions` returned `open=1`; `answer_question` returned `applied=5`; and the prior human drag survived. No CDP, `evaluate`, injection, extension, or flag contributed. Receipt: `project/hackathon-hunter/reports/evidence/study-map-m2/native-drag-question-answer-f2c4cecd.json`.
 
 ## Run locally
 

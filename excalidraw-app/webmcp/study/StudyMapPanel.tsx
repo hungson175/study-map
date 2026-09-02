@@ -165,7 +165,27 @@ export const StudyMapPanel = ({
       return;
     }
     const registration = createWebMCPRegistration(controller, ownerDocument);
+    const observationController = new AbortController();
+    const observationTimeouts: Array<ReturnType<typeof setTimeout>> = [];
     let active = true;
+
+    const refreshObservedCount = async () => {
+      try {
+        const count = await observedToolCount(ownerDocument);
+        if (active && !observationController.signal.aborted) {
+          setWebmcpStatus(
+            count === null
+              ? "WebMCP count unavailable"
+              : `${count} tools observed`,
+          );
+        }
+      } catch {
+        if (active && !observationController.signal.aborted) {
+          setWebmcpStatus("WebMCP count unavailable");
+        }
+      }
+    };
+
     void registration.ready.then(async (receipt) => {
       if (!active) {
         return;
@@ -178,23 +198,17 @@ export const StudyMapPanel = ({
         setWebmcpStatus("WebMCP registration failed safely");
         return;
       }
-      try {
-        const count = await observedToolCount(ownerDocument);
-        if (active) {
-          setWebmcpStatus(
-            count === null
-              ? "WebMCP count unavailable"
-              : `${count} tools observed`,
-          );
-        }
-      } catch {
-        if (active) {
-          setWebmcpStatus("WebMCP count unavailable");
-        }
+      await refreshObservedCount();
+      for (const delay of [250, 750]) {
+        observationTimeouts.push(
+          setTimeout(() => void refreshObservedCount(), delay),
+        );
       }
     });
     return () => {
       active = false;
+      observationController.abort();
+      observationTimeouts.forEach(clearTimeout);
       registration.dispose();
       if (ownsController) {
         controller.dispose();

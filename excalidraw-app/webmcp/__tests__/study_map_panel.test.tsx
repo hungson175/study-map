@@ -317,6 +317,92 @@ describe("Study Map panel", () => {
     expect(signals.every((signal) => signal.aborted)).toBe(true);
   });
 
+  it("re-observes the actual sibling registry after concurrent registration settles", async () => {
+    const definitions: Array<{ name: string }> = [];
+    const getTools = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Array.from({ length: 15 }, (_, index) => ({ name: `early-${index}` })),
+      )
+      .mockImplementation(async () => definitions);
+    Object.defineProperty(document, "modelContext", {
+      configurable: true,
+      value: {
+        registerTool: vi.fn(async (definition: { name: string }) => {
+          definitions.push(definition);
+        }),
+        getTools,
+      },
+    });
+    const api = {
+      ...makeApi().api,
+      addFiles: vi.fn(),
+      getAppState: vi.fn(() => ({
+        selectedElementIds: {},
+        exportBackground: true,
+        viewBackgroundColor: "#fff",
+        width: 1200,
+        height: 800,
+        offsetLeft: 0,
+        offsetTop: 0,
+        scrollX: 0,
+        scrollY: 0,
+        zoom: { value: 1 },
+      })),
+      onChange: vi.fn(() => () => undefined),
+      onScrollChange: vi.fn(() => () => undefined),
+    };
+    const store = {
+      load: vi.fn(async () => null),
+      save: vi.fn(),
+      list: vi.fn(async () => []),
+      rename: vi.fn(async () => null),
+      delete: vi.fn(async () => false),
+    };
+    const view = render(
+      <>
+        <StudyMapPanel
+          api={api as never}
+          controller={makeController() as never}
+        />
+        <RetrofitPanel api={api as never} />
+        <ProductShell api={api as never} store={store as never} />
+      </>,
+    );
+
+    expect(await screen.findByText("15 tools observed")).toBeTruthy();
+    expect(
+      await screen.findByText("16 tools observed", {}, { timeout: 1000 }),
+    ).toBeTruthy();
+    expect(definitions).toHaveLength(16);
+    expect(getTools.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+    view.unmount();
+  });
+
+  it("cancels delayed registry observations when the panel unmounts", async () => {
+    const getTools = vi.fn(async () => studyToolNames);
+    Object.defineProperty(document, "modelContext", {
+      configurable: true,
+      value: {
+        registerTool: vi.fn(async () => undefined),
+        getTools,
+      },
+    });
+    const view = render(
+      <StudyMapPanel
+        api={makeApi().api as never}
+        controller={makeController() as never}
+      />,
+    );
+
+    expect(await screen.findByText("5 tools observed")).toBeTruthy();
+    expect(getTools).toHaveBeenCalledOnce();
+    view.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(getTools).toHaveBeenCalledOnce();
+  });
+
   it("copies a live-origin prompt that tells the agent to call how_to_use first", async () => {
     window.history.replaceState({}, "", "/study-map/");
     const writeText = vi.fn(async (_value: string) => undefined);

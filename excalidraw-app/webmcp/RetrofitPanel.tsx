@@ -1,5 +1,5 @@
 import { sceneCoordsToViewportCoords } from "@excalidraw/common";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -29,22 +29,31 @@ export const RetrofitPanel = ({
   controller: supplied,
 }: RetrofitPanelProps) => {
   const controller = useMemo(
-    () => supplied ?? createRetrofitController(api),
+    () => supplied ?? createRetrofitController(api, { writeMode: "immediate" }),
     [api, supplied],
   );
+  const isImmediate = controller.getWriteMode() === "immediate";
+  const rootRef = useRef<HTMLElement>(null);
   const [snapshot, setSnapshot] = useState<RetrofitSnapshot>(
     controller.getSnapshot(),
   );
   const [, refreshViewport] = useState(0);
   const [message, setMessage] = useState(
-    "Agent changes stay staged until you commit.",
+    isImmediate
+      ? "Agent writes land directly and stay undoable. Drag, edit, delete or Undo anytime."
+      : "Agent changes stay staged until you commit.",
   );
   const [webmcpStatus, setWebmcpStatus] = useState("WEBMCP …");
 
   useEffect(() => controller.subscribe(setSnapshot), [controller]);
 
   useEffect(() => {
-    const registration = createWebMCPRegistration(controller);
+    const ownerDocument = rootRef.current?.ownerDocument;
+    if (!ownerDocument) {
+      setWebmcpStatus("WEBMCP ERROR");
+      return;
+    }
+    const registration = createWebMCPRegistration(controller, ownerDocument);
     let active = true;
     void registration.ready.then((receipt) => {
       if (!active) {
@@ -107,7 +116,9 @@ export const RetrofitPanel = ({
         active = null;
         setMessage(
           result.ok
-            ? "Explicit local replay staged — not a native agent. Review amber changes, then commit yourself."
+            ? isImmediate
+              ? "Explicit local replay applied directly — not a native agent. Every write remains undoable."
+              : "Explicit local replay staged — not a native agent. Review amber changes, then commit yourself."
             : `Local replay stopped after ${result.completedSteps}/5: ${result.message}`,
         );
         publish(result);
@@ -119,7 +130,7 @@ export const RetrofitPanel = ({
       active?.abort();
       window.removeEventListener(PLAIN_REPLAY_REQUEST_EVENT, startReplay);
     };
-  }, [controller]);
+  }, [controller, isImmediate]);
 
   const appState = api.getAppState();
   const zoom = appState.zoom.value;
@@ -150,123 +161,127 @@ export const RetrofitPanel = ({
 
   return (
     <>
-      <svg
-        className="webmcp-retrofit__ghosts"
-        data-ghost-overlay="true"
-        aria-hidden="true"
-        style={{ pointerEvents: "none" }}
-      >
-        <defs>
-          <marker
-            id="webmcp-arrowhead"
-            markerWidth="8"
-            markerHeight="8"
-            refX="7"
-            refY="4"
-            orient="auto"
-          >
-            <path d="M 0 0 L 8 4 L 0 8 z" />
-          </marker>
-        </defs>
-        {snapshot.pending?.elements.map((element) => {
-          if (element.type === "arrow" && element.points.length >= 2) {
-            const start = element.points[0];
-            const end = element.points[element.points.length - 1];
-            const startPoint = sceneCoordsToViewportCoords(
-              {
-                sceneX: element.x + start[0],
-                sceneY: element.y + start[1],
-              },
+      {!isImmediate ? (
+        <svg
+          className="webmcp-retrofit__ghosts"
+          data-ghost-overlay="true"
+          aria-hidden="true"
+          style={{ pointerEvents: "none" }}
+        >
+          <defs>
+            <marker
+              id="webmcp-arrowhead"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
+              orient="auto"
+            >
+              <path d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+          </defs>
+          {snapshot.pending?.elements.map((element) => {
+            if (element.type === "arrow" && element.points.length >= 2) {
+              const start = element.points[0];
+              const end = element.points[element.points.length - 1];
+              const startPoint = sceneCoordsToViewportCoords(
+                {
+                  sceneX: element.x + start[0],
+                  sceneY: element.y + start[1],
+                },
+                appState,
+              );
+              const endPoint = sceneCoordsToViewportCoords(
+                {
+                  sceneX: element.x + end[0],
+                  sceneY: element.y + end[1],
+                },
+                appState,
+              );
+              return (
+                <line
+                  key={element.id}
+                  data-ghost="true"
+                  data-ghost-connector="true"
+                  x1={startPoint.x}
+                  y1={startPoint.y}
+                  x2={endPoint.x}
+                  y2={endPoint.y}
+                  markerEnd="url(#webmcp-arrowhead)"
+                />
+              );
+            }
+            const point = sceneCoordsToViewportCoords(
+              { sceneX: element.x, sceneY: element.y },
               appState,
             );
-            const endPoint = sceneCoordsToViewportCoords(
-              {
-                sceneX: element.x + end[0],
-                sceneY: element.y + end[1],
-              },
-              appState,
-            );
+            const width = element.width * zoom;
+            const height = element.height * zoom;
+            const centerX = point.x + width / 2;
+            const centerY = point.y + height / 2;
+            const transform = element.angle
+              ? `rotate(${
+                  element.angle * (180 / Math.PI)
+                } ${centerX} ${centerY})`
+              : undefined;
+            if (element.type === "ellipse") {
+              return (
+                <ellipse
+                  key={element.id}
+                  data-ghost="true"
+                  cx={centerX}
+                  cy={centerY}
+                  rx={width / 2}
+                  ry={height / 2}
+                  transform={transform}
+                />
+              );
+            }
+            if (element.type === "diamond") {
+              return (
+                <polygon
+                  key={element.id}
+                  data-ghost="true"
+                  points={`${centerX},${point.y} ${
+                    point.x + width
+                  },${centerY} ${centerX},${point.y + height} ${
+                    point.x
+                  },${centerY}`}
+                  transform={transform}
+                />
+              );
+            }
+            if (element.type === "text") {
+              return (
+                <text
+                  key={element.id}
+                  data-ghost="true"
+                  x={centerX}
+                  y={centerY}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={element.fontSize * zoom}
+                  transform={transform}
+                >
+                  {element.originalText}
+                </text>
+              );
+            }
             return (
-              <line
+              <rect
                 key={element.id}
                 data-ghost="true"
-                data-ghost-connector="true"
-                x1={startPoint.x}
-                y1={startPoint.y}
-                x2={endPoint.x}
-                y2={endPoint.y}
-                markerEnd="url(#webmcp-arrowhead)"
-              />
-            );
-          }
-          const point = sceneCoordsToViewportCoords(
-            { sceneX: element.x, sceneY: element.y },
-            appState,
-          );
-          const width = element.width * zoom;
-          const height = element.height * zoom;
-          const centerX = point.x + width / 2;
-          const centerY = point.y + height / 2;
-          const transform = element.angle
-            ? `rotate(${element.angle * (180 / Math.PI)} ${centerX} ${centerY})`
-            : undefined;
-          if (element.type === "ellipse") {
-            return (
-              <ellipse
-                key={element.id}
-                data-ghost="true"
-                cx={centerX}
-                cy={centerY}
-                rx={width / 2}
-                ry={height / 2}
+                x={point.x}
+                y={point.y}
+                width={width}
+                height={height}
+                rx={8}
                 transform={transform}
               />
             );
-          }
-          if (element.type === "diamond") {
-            return (
-              <polygon
-                key={element.id}
-                data-ghost="true"
-                points={`${centerX},${point.y} ${
-                  point.x + width
-                },${centerY} ${centerX},${point.y + height} ${
-                  point.x
-                },${centerY}`}
-                transform={transform}
-              />
-            );
-          }
-          if (element.type === "text") {
-            return (
-              <text
-                key={element.id}
-                data-ghost="true"
-                x={centerX}
-                y={centerY}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontSize={element.fontSize * zoom}
-                transform={transform}
-              >
-                {element.originalText}
-              </text>
-            );
-          }
-          return (
-            <rect
-              key={element.id}
-              data-ghost="true"
-              x={point.x}
-              y={point.y}
-              width={width}
-              height={height}
-              rx={8}
-              transform={transform}
-            />
-          );
-        })}
-      </svg>
+          })}
+        </svg>
+      ) : null}
 
       {isFilm ? (
         <RecordingHud
@@ -277,42 +292,54 @@ export const RetrofitPanel = ({
         />
       ) : null}
 
-      <aside className="webmcp-retrofit" aria-label="Agent layout preview">
+      <aside
+        ref={rootRef}
+        className="webmcp-retrofit"
+        aria-label={
+          isImmediate ? "Agent drawing tools" : "Agent layout preview"
+        }
+      >
         <header>
           <strong>Agent layout</strong>
           <div className="webmcp-retrofit__status" aria-live="polite">
             <span className="is-idle">{webmcpStatus}</span>
-            <span className={snapshot.pending ? "is-pending" : "is-idle"}>
-              {snapshot.pending ? "UNCOMMITTED" : "READY"}
+            <span
+              className={
+                !isImmediate && snapshot.pending ? "is-pending" : "is-idle"
+              }
+            >
+              {!isImmediate && snapshot.pending ? "UNCOMMITTED" : "READY"}
             </span>
           </div>
         </header>
         <p>
-          {snapshot.pending
+          {!isImmediate && snapshot.pending
             ? `${
                 snapshot.pending.elements.length
               } shapes · ${snapshot.pending.operations.join(" → ")}`
             : `${snapshot.selectedIds.length} shapes selected`}
         </p>
         <RegistryPalette controller={controller} snapshot={snapshot} />
-        <div className="webmcp-retrofit__actions">
-          <button
-            id="commit-layout"
-            type="button"
-            disabled={!snapshot.pending}
-            onClick={(event) => humanAction(event, "commit")}
-          >
-            Commit layout
-          </button>
-          <button
-            id="discard-layout"
-            type="button"
-            disabled={!snapshot.pending}
-            onClick={(event) => humanAction(event, "discard")}
-          >
-            Discard
-          </button>
-        </div>
+        {!isImmediate ? (
+          <div className="webmcp-retrofit__actions">
+            <button
+              id="commit-layout"
+              type="button"
+              disabled={!snapshot.pending}
+              onClick={(event) => humanAction(event, "commit")}
+            >
+              Commit layout
+            </button>
+            <button
+              id="discard-layout"
+              type="button"
+              disabled={!snapshot.pending}
+              onClick={(event) => humanAction(event, "discard")}
+            >
+              Discard
+            </button>
+          </div>
+        ) : null}
         <small aria-live="polite">{message}</small>
       </aside>
     </>

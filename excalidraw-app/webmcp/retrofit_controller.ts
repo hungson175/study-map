@@ -117,7 +117,12 @@ type LedgerEntry = {
   sequence: number;
   tool: string;
   changedIds: string[];
-  outcome: "uncommitted" | "committed" | "discarded" | "unsafe_retry";
+  outcome:
+    | "uncommitted"
+    | "applied"
+    | "committed"
+    | "discarded"
+    | "unsafe_retry";
 };
 
 export type RetrofitSnapshot = {
@@ -218,7 +223,13 @@ const toolSchema = (
   additionalProperties: false,
 });
 
-export const createRetrofitController = (api: SceneApi) => {
+export type WriteMode = "staged" | "immediate";
+
+export const createRetrofitController = (
+  api: SceneApi,
+  options?: { writeMode?: WriteMode },
+) => {
+  const writeMode = options?.writeMode ?? "staged";
   let snapshot: RetrofitSnapshot = {
     selectedIds: [],
     pending: null,
@@ -349,6 +360,68 @@ export const createRetrofitController = (api: SceneApi) => {
     checkAbort(context.signal);
     const reportedIds =
       options?.reportedIds ?? stagedElements.map(({ id }) => id);
+
+    if (writeMode === "immediate") {
+      const current = liveElements();
+      const latestById = new Map(
+        current.map((element) => [element.id, element]),
+      );
+      for (const [id, base] of Object.entries(baseVersions)) {
+        const live = latestById.get(id);
+        if (
+          !live ||
+          live.locked ||
+          live.isDeleted ||
+          live.version !== base.version ||
+          live.versionNonce !== base.versionNonce
+        ) {
+          return failure(
+            "unsafe_retry",
+            "A target changed before it could be applied",
+          );
+        }
+      }
+
+      const projected = Array.from(pendingById.values());
+      const additions = projected.filter(({ id }) => !baseVersions[id]);
+      if (additions.some(({ id }) => latestById.has(id))) {
+        return failure(
+          "unsafe_retry",
+          "A generated element id collided with the live drawing",
+        );
+      }
+
+      checkAbort(context.signal);
+      const projectedById = new Map(
+        projected.map((element) => [element.id, element]),
+      );
+      api.updateScene({
+        elements: [
+          ...current.map((element) => projectedById.get(element.id) ?? element),
+          ...additions,
+        ],
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      snapshot = {
+        ...snapshot,
+        pending: null,
+        ledger: [
+          ...snapshot.ledger,
+          {
+            sequence: ++sequence,
+            tool,
+            changedIds: reportedIds.slice(0, MAX_RETURNED_IDS),
+            outcome: "applied",
+          },
+        ],
+      };
+      emit();
+      return {
+        ok: true,
+        status: "applied",
+        ...summarizeIds(reportedIds),
+      };
+    }
 
     snapshot = {
       ...snapshot,
@@ -956,7 +1029,9 @@ export const createRetrofitController = (api: SceneApi) => {
     {
       name: "align_shapes",
       description:
-        "Stage an exact edge or center alignment without changing the live drawing.",
+        writeMode === "immediate"
+          ? "Apply an exact edge or center alignment directly to the drawing."
+          : "Stage an exact edge or center alignment without changing the live drawing.",
       inputSchema: toolSchema(
         {
           ids: {
@@ -975,7 +1050,9 @@ export const createRetrofitController = (api: SceneApi) => {
     {
       name: "equalize_size",
       description:
-        "Stage equal widths or heights without changing the live drawing.",
+        writeMode === "immediate"
+          ? "Apply equal widths or heights directly to the drawing."
+          : "Stage equal widths or heights without changing the live drawing.",
       inputSchema: toolSchema(
         {
           ids: {
@@ -994,7 +1071,9 @@ export const createRetrofitController = (api: SceneApi) => {
     {
       name: "distribute_shapes",
       description:
-        "Stage even gaps between shapes along one axis without changing the live drawing.",
+        writeMode === "immediate"
+          ? "Apply even gaps between shapes along one axis directly to the drawing."
+          : "Stage even gaps between shapes along one axis without changing the live drawing.",
       inputSchema: toolSchema(
         {
           ids: {
@@ -1012,7 +1091,9 @@ export const createRetrofitController = (api: SceneApi) => {
     {
       name: "connect_shapes",
       description:
-        "Stage directed connectors from up to 40 explicit shapes to one target without changing the live drawing.",
+        writeMode === "immediate"
+          ? "Apply directed connectors from up to 40 explicit shapes to one target."
+          : "Stage directed connectors from up to 40 explicit shapes to one target without changing the live drawing.",
       inputSchema: toolSchema(
         {
           sourceIds: {
@@ -1031,7 +1112,10 @@ export const createRetrofitController = (api: SceneApi) => {
     },
     {
       name: "create_shapes",
-      description: "Stage labeled rectangle, ellipse, or diamond nodes.",
+      description:
+        writeMode === "immediate"
+          ? "Create labeled rectangle, ellipse, or diamond nodes directly on the drawing."
+          : "Stage labeled rectangle, ellipse, or diamond nodes.",
       inputSchema: toolSchema(
         {
           shapes: {
@@ -1181,6 +1265,7 @@ export const createRetrofitController = (api: SceneApi) => {
     executeTool: (name: string, args: unknown, context: ToolExecutionContext) =>
       registry.execute(name, args, context),
     getSnapshot: () => cloneSnapshot(snapshot),
+    getWriteMode: (): WriteMode => writeMode,
     subscribe: (listener: Listener) => {
       listeners.add(listener);
       return () => {

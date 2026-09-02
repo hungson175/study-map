@@ -13,7 +13,13 @@ describe("Excalidraw host integration", () => {
     expect(appSource).toContain(
       'import { RetrofitPanel } from "./webmcp/RetrofitPanel";',
     );
+    expect(appSource).toContain(
+      'import { StudyMapPanel } from "./webmcp/study/StudyMapPanel";',
+    );
     expect(appSource).toContain("<RetrofitPanel api={excalidrawAPI}");
+    expect(
+      appSource.indexOf("<StudyMapPanel api={excalidrawAPI}"),
+    ).toBeLessThan(appSource.indexOf("<RetrofitPanel api={excalidrawAPI}"));
     expect(appSource).not.toContain("<AppWelcomeScreen");
     expect(appSource).not.toContain(
       ["document", ["model", "Context"].join("")].join("."),

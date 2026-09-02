@@ -144,6 +144,7 @@ import { AIComponents } from "./components/AI";
 import { ExcalidrawPlusIframeExport } from "./ExcalidrawPlusIframeExport";
 import { RetrofitPanel } from "./webmcp/RetrofitPanel";
 import { ProductShell } from "./webmcp/product/ProductShell";
+import { StudyMapPanel } from "./webmcp/study/StudyMapPanel";
 
 import "./index.scss";
 
@@ -1294,6 +1295,7 @@ const ExcalidrawWrapper = () => {
           />
         )}
       </Excalidraw>
+      {excalidrawAPI && <StudyMapPanel api={excalidrawAPI} />}
       {excalidrawAPI && <RetrofitPanel api={excalidrawAPI} />}
       {excalidrawAPI && <ProductShell api={excalidrawAPI} />}
     </div>

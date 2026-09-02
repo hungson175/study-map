@@ -84,7 +84,7 @@ describe("Entry B product actions", () => {
 
     expect(await screen.findByText("Checkout architecture")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
-    fireEvent.change(screen.getByLabelText("New diagram name"), {
+    fireEvent.change(screen.getByLabelText("New study map name"), {
       target: { value: "Checkout v2" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save name" }));
@@ -99,7 +99,7 @@ describe("Entry B product actions", () => {
       "Opened Checkout architecture",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Your diagrams" }));
+    fireEvent.click(screen.getByRole("button", { name: "Your study maps" }));
     await screen.findByText("Checkout architecture");
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
@@ -110,7 +110,7 @@ describe("Entry B product actions", () => {
     const api = makeApi();
     const store = makeStore();
     render(<ProductShell api={api as never} store={store as never} />);
-    fireEvent.click(screen.getByRole("button", { name: "Share link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Share study map" }));
     const shareInput = await screen.findByLabelText("Share URL");
     expect((shareInput as HTMLInputElement).value).toMatch(
       /#view=workspace&share=[A-Za-z0-9_-]+$/u,
@@ -130,7 +130,7 @@ describe("Entry B product actions", () => {
       ),
     );
     expect(screen.getAllByRole("status").at(-1)).toHaveTextContent(
-      "Shared diagram opened locally",
+      "Shared study map opened locally",
     );
   });
 
@@ -173,12 +173,12 @@ describe("Entry B product actions", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
     render(<ProductShell api={api as never} store={makeStore() as never} />);
-    fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export study map" }));
 
     await waitFor(() => expect(exportToBlob).toHaveBeenCalledOnce());
     expect(anchorClick).toHaveBeenCalledOnce();
     expect(api.updateScene).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toHaveTextContent("PNG exported");
+    expect(screen.getByRole("status")).toHaveTextContent("Study map exported");
   });
 
   it("does not expose the local replay demo as a product action", () => {

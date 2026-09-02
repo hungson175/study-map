@@ -1,8 +1,10 @@
-# What it cost to retrofit WebMCP onto Excalidraw
+# Study Map — the WebMCP retrofit boundary
 
-This is a measured retrofit of the existing MIT-licensed Excalidraw app, not a new canvas built for a demo. The normal editor remains usable; WebMCP adds a page-owned tool surface for exact scene operations while a person keeps control of the final write.
+Study Map is a focused learning product retrofitted onto the existing MIT-licensed Excalidraw app, not a new canvas built for a demo. The editor remains usable; WebMCP adds page-owned tools for reading the live study graph, finding open questions, and writing an answer next to the node a person chose.
 
-**[Open the live retrofit](https://hungson175.github.io/excalidraw-webmcp/) · [Inspect the exact product diff](https://github.com/hungson175/excalidraw-webmcp/compare/e1bb9ff8f8931e783c11d104abb8967ac6605c9a...59ca15861bde265f74d6785a0e4383b05fdc0caf)**
+**[Open Study Map](https://hungson175.github.io/study-map/) · [Inspect the public source](https://github.com/hungson175/study-map)**
+
+The inherited retrofit history below describes the seed on which Study Map is built. Study Map adds a study-first welcome, a human-pinned question marker, bounded chart reads, and an immediate undoable answer path. Native invocation claims remain pending until this exact origin passes its own gate.
 
 ## Measured cost
 

@@ -65,11 +65,11 @@ const safeFilename = (name: string) =>
       .toLocaleLowerCase()
       .replace(/[^a-z0-9]+/gu, "-")
       .replace(/^-|-$/gu, "")
-      .slice(0, 60) || "diagram"
+      .slice(0, 60) || "study-map"
   }.png`;
 
 const CHATGPT_DEMO_PROMPT =
-  "Learn about WebMCP, then open this website: https://hungson175.github.io/excalidraw-webmcp/ — using your own built-in browser and WebMCP, create a diagram that explains the concept of WebMCP to me.";
+  "Open Study Map at https://hungson175.github.io/study-map/ in your built-in browser. Call how_to_use first, then help me learn by drawing and answering inside the map.";
 
 export const ProductShell = ({
   api,
@@ -83,7 +83,7 @@ export const ProductShell = ({
   const [view, setView] = useState<ProductView>(initialRoute.view);
   const [diagrams, setDiagrams] = useState<DiagramSummary[]>([]);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [name, setName] = useState("Untitled diagram");
+  const [name, setName] = useState("Untitled study map");
   const [currentId, setCurrentId] = useState<string | undefined>();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -209,15 +209,15 @@ export const ProductShell = ({
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       });
       importedShare.current = share;
-      setName(decoded.scene.name ?? "Shared diagram");
+      setName(decoded.scene.name ?? "Shared study map");
       setCurrentId(undefined);
-      setStatus("Shared diagram opened locally");
+      setStatus("Shared study map opened locally");
       return true;
     };
     if (applySharedScene()) {
       return;
     }
-    setStatus("Opening shared diagram…");
+    setStatus("Opening shared study map…");
     let unsubscribe: () => void = () => undefined;
     unsubscribe = api.onChange(() => {
       if (applySharedScene()) {
@@ -258,7 +258,7 @@ export const ProductShell = ({
   const openDiagram = async (id: string) => {
     const record = await store.load(id);
     if (!record) {
-      setStatus("That saved diagram is no longer available");
+      setStatus("That saved study map is no longer available");
       await refreshDiagrams();
       return;
     }
@@ -274,9 +274,9 @@ export const ProductShell = ({
     try {
       const renamed = await store.rename(id, editingName);
       if (!renamed) {
-        setStatus("That saved diagram is no longer available");
+        setStatus("That saved study map is no longer available");
       } else {
-        setStatus("Diagram renamed");
+        setStatus("Study map renamed");
       }
       setEditingId(null);
       await refreshDiagrams();
@@ -290,7 +290,9 @@ export const ProductShell = ({
   const deleteDiagram = async (id: string) => {
     const deleted = await store.delete(id);
     setDeleteId(null);
-    setStatus(deleted ? "Diagram deleted" : "Diagram was already unavailable");
+    setStatus(
+      deleted ? "Study map deleted" : "Study map was already unavailable",
+    );
     await refreshDiagrams();
   };
 
@@ -307,7 +309,7 @@ export const ProductShell = ({
       setShareUrl(url);
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
-        setStatus("Share link copied — the diagram is inside the URL");
+        setStatus("Share link copied — the study map is inside the URL");
       } else {
         setStatus("Share link ready — copy it below");
       }
@@ -340,7 +342,7 @@ export const ProductShell = ({
       anchor.download = safeFilename(name);
       anchor.click();
       URL.revokeObjectURL(url);
-      setStatus("PNG exported");
+      setStatus("Study map exported as PNG");
     } catch {
       setStatus("Image export failed safely");
     }
@@ -368,16 +370,18 @@ export const ProductShell = ({
     <div ref={rootRef} className="product-shell" data-product-view={view}>
       <nav
         className="product-shell__workspace-nav"
-        aria-label="Diagram workspace"
+        aria-label="Study map workspace"
       >
-        <span className="product-shell__wordmark">◇ Canvas Agent</span>
+        <span className="product-shell__wordmark">Study Map</span>
         <div>
           <button
             type="button"
             className="product-shell__copy-prompt"
             onClick={() => void copyDemoPrompt()}
-            aria-label={promptCopied ? "Prompt copied" : "Copy demo prompt"}
-            title={promptCopied ? "Prompt copied" : "Copy demo prompt"}
+            aria-label={
+              promptCopied ? "Prompt copied" : "Copy Study Map prompt"
+            }
+            title={promptCopied ? "Prompt copied" : "Copy Study Map prompt"}
           >
             {promptCopied ? (
               <svg aria-hidden="true" viewBox="0 0 16 16">
@@ -392,16 +396,16 @@ export const ProductShell = ({
             <span>{promptCopied ? "Copied" : "Copy prompt"}</span>
           </button>
           <button type="button" onClick={() => go("library")}>
-            Your diagrams
+            Your study maps
           </button>
           <button type="button" onClick={() => setSaveOpen(true)}>
-            Save diagram
+            Save study map
           </button>
           <button type="button" onClick={() => void createShareLink()}>
-            Share link
+            Share study map
           </button>
           <button type="button" onClick={() => void exportPng()}>
-            Export PNG
+            Export study map
           </button>
         </div>
       </nav>
@@ -413,7 +417,7 @@ export const ProductShell = ({
         >
           <header>
             <p className="product-shell__eyebrow">LOCAL TO THIS BROWSER</p>
-            <h1 id="diagram-library-title">Your diagrams</h1>
+            <h1 id="diagram-library-title">Your study maps</h1>
             <p>
               Open, rename, or delete your saved work. Nothing is sent to a
               server.
@@ -431,7 +435,7 @@ export const ProductShell = ({
                       }}
                     >
                       <label>
-                        <span>New diagram name</span>
+                        <span>New study map name</span>
                         <input
                           value={editingName}
                           onChange={(event) =>
@@ -501,14 +505,14 @@ export const ProductShell = ({
           ) : (
             <section className="product-shell__empty">
               <span aria-hidden="true">◇</span>
-              <h2>Your first diagram starts here.</h2>
-              <p>Draw freely, then save a named copy to this browser.</p>
+              <h2>Your first study map starts here.</h2>
+              <p>Learn visually, then save a named copy to this browser.</p>
               <button
                 className="is-primary"
                 type="button"
                 onClick={() => go("workspace")}
               >
-                Open the canvas
+                Open the study map
               </button>
             </section>
           )}
@@ -522,10 +526,10 @@ export const ProductShell = ({
             onSubmit={saveDiagram}
             aria-labelledby="save-title"
           >
-            <h2 id="save-title">Save this diagram</h2>
+            <h2 id="save-title">Save this study map</h2>
             <p>Stored only in this browser. You can rename it later.</p>
             <label>
-              <span>Diagram name</span>
+              <span>Study map name</span>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}

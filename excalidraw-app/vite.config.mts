@@ -1,4 +1,5 @@
 import path from "path";
+
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import svgrPlugin from "vite-plugin-svgr";
@@ -7,6 +8,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
+
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
   // To load .env variables
@@ -14,7 +16,7 @@ export default defineConfig(({ mode }) => {
   // https://vitejs.dev/config/
   return {
     // Keep the production build deployable below a GitHub Pages project path.
-    base: "./",
+    base: "/study-map/",
     server: {
       port: Number(envVars.VITE_APP_PORT || 3000),
       // open the browser
@@ -135,7 +137,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       Sitemap({
-        hostname: "https://excalidraw.com",
+        hostname: "https://hungson175.github.io/study-map/",
         outDir: "build",
         changefreq: "monthly",
         // its static in public folder
@@ -228,10 +230,9 @@ export default defineConfig(({ mode }) => {
           maximumFileSizeToCacheInBytes: 2.3 * 1024 ** 2, // 2.3MB
         },
         manifest: {
-          short_name: "Excalidraw",
-          name: "Excalidraw",
-          description:
-            "Excalidraw is a whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them.",
+          short_name: "Study Map",
+          name: "Study Map",
+          description: "Learn anything as a map you and ChatGPT draw together.",
           icons: [
             {
               src: "android-chrome-192x192.png",
@@ -254,21 +255,21 @@ export default defineConfig(({ mode }) => {
               type: "image/png",
             },
           ],
-          start_url: "/",
-          id: "excalidraw",
+          start_url: "/study-map/",
+          id: "study-map",
           display: "standalone",
           theme_color: "#121212",
           background_color: "#ffffff",
           file_handlers: [
             {
-              action: "/",
+              action: "/study-map/",
               accept: {
                 "application/vnd.excalidraw+json": [".excalidraw"],
               },
             },
           ],
           share_target: {
-            action: "/web-share-target",
+            action: "/study-map/web-share-target",
             method: "POST",
             enctype: "multipart/form-data",
             params: {

@@ -57,12 +57,12 @@ describe("Entry B product shell", () => {
     render(<ProductShell api={api as never} store={store as never} />);
 
     expect(
-      screen.getByRole("navigation", { name: "Diagram workspace" }),
+      screen.getByRole("navigation", { name: "Study map workspace" }),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Start drawing" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Watch AI draw" })).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Copy demo prompt" }),
+      screen.getByRole("button", { name: "Copy Study Map prompt" }),
     ).toBeTruthy();
     expect(screen.getByText("Copy prompt")).toBeTruthy();
     expect(screen.queryByText("Try this WebMCP demo")).toBeNull();
@@ -77,10 +77,10 @@ describe("Entry B product shell", () => {
     render(<ProductShell api={api as never} store={store as never} />);
 
     expect(
-      screen.getByRole("navigation", { name: "Diagram workspace" }),
+      screen.getByRole("navigation", { name: "Study map workspace" }),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save diagram" }));
-    fireEvent.change(screen.getByLabelText("Diagram name"), {
+    fireEvent.click(screen.getByRole("button", { name: "Save study map" }));
+    fireEvent.change(screen.getByLabelText("Study map name"), {
       target: { value: "Checkout architecture" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save now" }));
@@ -103,11 +103,13 @@ describe("Entry B product shell", () => {
       <ProductShell api={makeApi() as never} store={makeStore() as never} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy demo prompt" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy Study Map prompt" }),
+    );
 
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(
-        "Learn about WebMCP, then open this website: https://hungson175.github.io/excalidraw-webmcp/ — using your own built-in browser and WebMCP, create a diagram that explains the concept of WebMCP to me.",
+        "Open Study Map at https://hungson175.github.io/study-map/ in your built-in browser. Call how_to_use first, then help me learn by drawing and answering inside the map.",
       ),
     );
     expect(screen.getByRole("button", { name: "Prompt copied" })).toBeTruthy();
@@ -150,7 +152,7 @@ describe("Entry B product shell", () => {
     });
     expect(state).toMatchObject({
       ok: true,
-      name: "Untitled diagram",
+      name: "Untitled study map",
       elementCount: 0,
     });
     expect(signals.every((signal) => !signal.aborted)).toBe(true);
@@ -163,9 +165,9 @@ describe("Entry B product shell", () => {
     render(
       <ProductShell api={makeApi() as never} store={makeStore() as never} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Your diagrams" }));
+    fireEvent.click(screen.getByRole("button", { name: "Your study maps" }));
     expect(
-      await screen.findByText("Your first diagram starts here."),
+      await screen.findByText("Your first study map starts here."),
     ).toBeTruthy();
 
     act(() =>
@@ -177,9 +179,9 @@ describe("Entry B product shell", () => {
     );
 
     expect(
-      screen.getByRole("navigation", { name: "Diagram workspace" }),
+      screen.getByRole("navigation", { name: "Study map workspace" }),
     ).toBeTruthy();
-    expect(screen.queryByText("Your first diagram starts here.")).toBeNull();
+    expect(screen.queryByText("Your first study map starts here.")).toBeNull();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Agent is staging create_shapes",
     );
@@ -190,9 +192,9 @@ describe("Entry B product shell", () => {
     const api = makeApi();
     const store = makeStore();
     render(<ProductShell api={api as never} store={store as never} />);
-    fireEvent.click(screen.getByRole("button", { name: "Your diagrams" }));
+    fireEvent.click(screen.getByRole("button", { name: "Your study maps" }));
     await waitFor(() => expect(store.list).toHaveBeenCalled());
-    expect(screen.getByText("Your first diagram starts here.")).toBeTruthy();
+    expect(screen.getByText("Your first study map starts here.")).toBeTruthy();
 
     expect(
       screen.queryByRole("button", { name: "Use with ChatGPT" }),
@@ -212,7 +214,7 @@ describe("Entry B product shell", () => {
     );
 
     expect(
-      screen.getByRole("navigation", { name: "Diagram workspace" }),
+      screen.getByRole("navigation", { name: "Study map workspace" }),
     ).toBeTruthy();
     expect(screen.queryByText("Try this WebMCP demo")).toBeNull();
     expect(screen.queryByText("CHATGPT DESKTOP SITE TOOLS")).toBeNull();

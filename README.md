@@ -1,63 +1,39 @@
-# Draw with your agent
+# Study Map
 
-A whiteboard you draw on by hand, that your own AI agent can also draw on — at the same time, in the
-same tab, without an API key or an account.
+Learn anything as a map you and ChatGPT draw together. Pin a question mark to a node, let the agent research it, and keep the answer inside the map where you can drag, edit, delete, or undo it by hand.
 
-**Live:** <https://hungson175.github.io/excalidraw-webmcp/>
+**Live:** <https://hungson175.github.io/study-map/>
 
-## What it does
+## The study loop
 
-Open it and draw, exactly like Excalidraw, because it is Excalidraw. Then point your own agent at the
-page and ask for something — a diagram of an architecture you describe, six boxes aligned and wired
-to a gateway, arrows anchored where they should be. The agent's work arrives **staged**: ghosted
-outlines and a listed set of operations. Nothing is real until you commit it, and the agent cannot
-commit it for you. You keep drawing by hand the whole time; it never takes your cursor.
+1. Name a topic, paste notes, or choose a local PDF.
+2. Ask ChatGPT to call `how_to_use` first and draw a small study map.
+3. Select a node and pin a question with **? Ask about selected node**.
+4. ChatGPT calls `list_questions` and `answer_question`; the answer lands under that node as ordinary undoable elements.
+5. Correct the map by hand and continue with another question.
 
-Your diagrams stay in your browser. There is no server, no sign-up, and nothing to configure.
+The welcome stores pasted text and PDF metadata only in local page state in this build; it does not claim to parse or upload a PDF. Maps and files stay in the browser. There is no Study Map account or backend.
 
-## How your agent reaches it
+## WebMCP surface
 
-The page publishes its drawing operations through [WebMCP](https://github.com/webmachinelearning/webmcp)
-— `document.modelContext.registerTool` — so any agent that speaks WebMCP can discover and call them.
-No key is ever minted, because the tool runs inside your own session in your own tab.
+Study Map publishes page-owned operations through [`document.modelContext.registerTool`](https://github.com/webmachinelearning/webmcp). The five study tools are `how_to_use`, `get_chart`, `get_selection`, `list_questions`, and `answer_question`. The inherited scene and local canvas lifecycle tools remain available for composing and saving maps.
 
-The simplest route today: open the ChatGPT desktop app, choose Codex on **GPT-5.6 Sol or Terra**
-(Luna has WebMCP disabled), and in its built-in browser open the live URL and ask it to draw.
+The page reports the tool count observed from the browser rather than asserting a static number. Native discovery and invocation on this exact public origin remain unproven until the own-origin gate is run.
 
-### WebMCP tool surface
+## Run locally
 
-The page exposes small tools that agents can compose:
+```bash
+yarn install
+yarn start
+# production package
+yarn build
+```
 
-- Canvas lifecycle: `get_canvas_state`, `list_saved_canvases`, `save_canvas`, `create_canvas`,
-  and `open_saved_canvas`.
-- Diagram editing: `select_shapes`, `create_shapes`, `align_shapes`, `equalize_size`,
-  `distribute_shapes`, and `connect_shapes`.
-
-Lifecycle tools use the same local-first store as the visible product UI. Creating a blank canvas or
-opening another saved canvas preserves the current work locally before switching. Diagram edits stay
-staged until the human clicks **Commit layout**.
-
-## Why this needs WebMCP
-
-A whiteboard is a canvas: one node in the DOM and one in the accessibility tree, with **zero**
-individually addressable shapes inside it. An agent working from screenshots is not slow here, it is
-blind — it can only guess pixel coordinates. The page, by contrast, holds the real scene graph, so
-it can offer operations over actual shapes. That is what it publishes.
-
-## Status
-
-Built for the OpenAI WebMCP hackathon, September 2026, and kept as a product afterwards. Storage is
-local-first behind a single interface so a server with real sign-in can be added without a rewrite.
-
-Native browser-agent invocation is **unproven** and is not claimed anywhere in the product; what is
-verified is browser-API discovery and execution. [RETROFIT.md](./RETROFIT.md) records the upstream
-diff, the build window, the browser proof, the safety boundary, and the limits of every claim.
+The Vite base is `/study-map/`; GitHub Pages hosts the production build at the live URL above.
 
 ## Credit
 
-This is a fork of [Excalidraw](https://github.com/excalidraw/excalidraw), MIT licensed, whose editor
-does all the drawing. The WebMCP tool surface, the staging gate and the product shell are the
-additions. Upstream's own README follows.
+This is a fork of [Excalidraw](https://github.com/excalidraw/excalidraw), MIT licensed, whose editor provides the hand-drawn canvas. Study Map adds the study question model, WebMCP registration, study-first interface, and local product shell. Upstream's own README follows.
 
 ---
 
@@ -67,7 +43,6 @@ additions. Upstream's own README follows.
     <img alt="Excalidraw" src="https://excalidraw.nyc3.cdn.digitaloceanspaces.com/github/excalidraw_github_cover_2.png" />
   </picture>
 </a>
-
 
 <h4 align="center">
   <a href="https://excalidraw.com">Excalidraw Editor</a> |

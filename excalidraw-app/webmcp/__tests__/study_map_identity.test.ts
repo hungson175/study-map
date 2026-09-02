@@ -7,7 +7,7 @@ const root = path.resolve(import.meta.dirname, "../../..");
 const read = (relative: string) =>
   fs.readFileSync(path.join(root, relative), "utf8");
 const VERSION_B_PROMPT =
-  "I attached a paper. I am a software engineer learning about LLMs. Open Study Map in your built-in browser, call how_to_use first, and map this paper for me.";
+  "Open Study Map in your built-in browser, call how_to_use first, and map what I am learning with me.";
 
 describe("Study Map public identity", () => {
   it("mounts the study registration before the two retained seed surfaces", () => {
@@ -96,6 +96,13 @@ describe("Study Map public identity", () => {
     expect(shell).toContain('from "../study/study_map_prompt"');
     expect(panel).not.toContain(VERSION_B_PROMPT);
     expect(shell).not.toContain(VERSION_B_PROMPT);
+    const publicPromptCopy = [prompt, panel, shell, read("README.md")].join(
+      "\n",
+    );
+    expect(publicPromptCopy).not.toMatch(/I attached a paper/u);
+    expect(publicPromptCopy).not.toMatch(
+      /I am a software engineer learning about LLMs/u,
+    );
     expect(panel).not.toMatch(
       /PdfMetadata|MAX_PASTE_LENGTH|sanitizePdf|acceptPdf|type="file"|Drop a PDF|Paste what you are learning|reading comes next|Open a blank study map/u,
     );

@@ -109,7 +109,7 @@ describe("Entry B product shell", () => {
 
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(
-        "I attached a paper. I am a software engineer learning about LLMs. Open Study Map in your built-in browser, call how_to_use first, and map this paper for me.",
+        "Open Study Map in your built-in browser, call how_to_use first, and map what I am learning with me.",
       ),
     );
     expect(screen.getByRole("button", { name: "Prompt copied" })).toBeTruthy();

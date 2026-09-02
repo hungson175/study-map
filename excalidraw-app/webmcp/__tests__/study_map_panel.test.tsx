@@ -19,7 +19,7 @@ import { RetrofitPanel } from "../RetrofitPanel";
 import { WEBMCP_TOOL_ACTIVITY_EVENT } from "../tool_activity";
 
 const VERSION_B_PROMPT =
-  "I attached a paper. I am a software engineer learning about LLMs. Open Study Map in your built-in browser, call how_to_use first, and map this paper for me.";
+  "Open Study Map in your built-in browser, call how_to_use first, and map what I am learning with me.";
 
 const studyToolNames = [
   "how_to_use",
@@ -138,7 +138,7 @@ describe("Study Map panel", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Attach your paper in ChatGPT. Study Map is the canvas it can draw on with you.",
+        "Tell ChatGPT what you are learning — attach a paper or notes if you have them. Study Map is the canvas it can draw on with you.",
       ),
     ).toBeTruthy();
     expect(screen.getByText(VERSION_B_PROMPT)).toBeTruthy();

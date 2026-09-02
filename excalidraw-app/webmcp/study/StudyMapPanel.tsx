@@ -326,8 +326,8 @@ export const StudyMapPanel = ({
               Learn anything as a map you and ChatGPT draw together.
             </p>
             <p className="study-map__start-explainer">
-              Attach your paper in ChatGPT. Study Map is the canvas it can draw
-              on with you.
+              Tell ChatGPT what you are learning — attach a paper or notes if
+              you have them. Study Map is the canvas it can draw on with you.
             </p>
             <p className="study-map__start-prompt">{STUDY_MAP_START_PROMPT}</p>
             <button type="button" onClick={() => void copyTalkPrompt()}>

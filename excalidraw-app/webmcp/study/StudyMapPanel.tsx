@@ -150,6 +150,10 @@ export const StudyMapPanel = ({
   );
   const ownsController = !suppliedController;
   const rootRef = useRef<HTMLDivElement>(null);
+  const askPointerTargetRef = useRef<Extract<
+    QuestionTarget,
+    { ok: true }
+  > | null>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(
     initialWelcomeOpen ?? api.getSceneElements().length === 0,
   );
@@ -246,11 +250,42 @@ export const StudyMapPanel = ({
     }
   };
 
+  const rememberQuestionTarget = (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => {
+    if (!event.nativeEvent.isTrusted) {
+      askPointerTargetRef.current = null;
+      return;
+    }
+    const target = resolveQuestionTarget({ isTrusted: true }, api);
+    askPointerTargetRef.current = target.ok ? target : null;
+  };
+
   const openQuestion = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const target = resolveQuestionTarget(
-      { isTrusted: event.nativeEvent.isTrusted },
-      api,
-    );
+    if (!event.nativeEvent.isTrusted) {
+      askPointerTargetRef.current = null;
+      setStatus("A trusted click is required");
+      return;
+    }
+    const remembered = askPointerTargetRef.current;
+    askPointerTargetRef.current = null;
+    const target = remembered
+      ? (() => {
+          const elements = api.getSceneElements();
+          const live = elements.find(({ id }) => id === remembered.nodeId);
+          return live && isStudyNode(live)
+            ? {
+                ok: true as const,
+                nodeId: live.id,
+                label: labelFor(live, elements),
+              }
+            : {
+                ok: false as const,
+                reason: "single_study_node_required" as const,
+                message: "Select one unlocked study node",
+              };
+        })()
+      : resolveQuestionTarget({ isTrusted: true }, api);
     if (!target.ok) {
       setStatus(target.message);
       return;
@@ -345,7 +380,11 @@ export const StudyMapPanel = ({
       ) : null}
 
       <aside className="study-map__question-panel" aria-label="Study questions">
-        <button type="button" onClick={openQuestion}>
+        <button
+          type="button"
+          onPointerDown={rememberQuestionTarget}
+          onClick={openQuestion}
+        >
           ? Ask about selected node
         </button>
         {question ? (

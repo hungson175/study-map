@@ -85,7 +85,7 @@ const makeController = () => ({
 
 const invokeReactHandler = (
   element: Element,
-  name: "onClick" | "onSubmit",
+  name: "onClick" | "onPointerDown" | "onSubmit",
   payload: unknown,
 ) => {
   const key = Object.keys(element).find((entry) =>
@@ -696,6 +696,71 @@ describe("Study Map panel", () => {
     expect(
       await screen.findByText(/WebMCP (unavailable|count unavailable)/),
     ).toBeTruthy();
+  });
+
+  it("keeps the trusted pointer target when Excalidraw clears selection before click", async () => {
+    const fixture = makeApi([node("hang-lang")]);
+    fixture.setSelected("hang-lang");
+    render(
+      <StudyMapPanel
+        api={fixture.api as never}
+        controller={makeController() as never}
+        initialWelcomeOpen={false}
+      />,
+    );
+    const open = screen.getByRole("button", {
+      name: "? Ask about selected node",
+    });
+
+    act(() =>
+      invokeReactHandler(open, "onPointerDown", {
+        nativeEvent: { isTrusted: true },
+      }),
+    );
+    fixture.setSelected();
+    act(() =>
+      invokeReactHandler(open, "onClick", { nativeEvent: { isTrusted: true } }),
+    );
+
+    expect(screen.getByRole("form", { name: "Ask about node" })).toBeTruthy();
+    expect(screen.getByText("Selected node")).toBeTruthy();
+    expect(await screen.findByText(/WebMCP unavailable/)).toBeTruthy();
+  });
+
+  it("refuses a pointer target deleted before its trusted click is consumed", async () => {
+    const fixture = makeApi([node("hang-lang")]);
+    fixture.setSelected("hang-lang");
+    render(
+      <StudyMapPanel
+        api={fixture.api as never}
+        controller={makeController() as never}
+        initialWelcomeOpen={false}
+      />,
+    );
+    const open = screen.getByRole("button", {
+      name: "? Ask about selected node",
+    });
+
+    act(() =>
+      invokeReactHandler(open, "onPointerDown", {
+        nativeEvent: { isTrusted: true },
+      }),
+    );
+    fixture.updateScene({
+      elements: [{ ...node("hang-lang"), isDeleted: true }],
+    });
+    fixture.updateScene.mockClear();
+    fixture.setSelected();
+    act(() =>
+      invokeReactHandler(open, "onClick", { nativeEvent: { isTrusted: true } }),
+    );
+
+    expect(screen.queryByRole("form", { name: "Ask about node" })).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Select one unlocked study node",
+    );
+    expect(fixture.updateScene).not.toHaveBeenCalled();
+    expect(await screen.findByText(/WebMCP unavailable/)).toBeTruthy();
   });
 
   it("refuses synthetic UI clicks before reading selection or writing", async () => {

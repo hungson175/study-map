@@ -256,27 +256,27 @@ export const createStudyQuestionController = (
       },
       waiting: {
         next_step:
-          "Read the open questions, research them, then answer each one directly inside the map.",
-        en: "I can see an open question. I will research it and place the answer under its node.",
-        vi: "Tôi thấy câu hỏi đang mở. Tôi sẽ tìm hiểu và đặt câu trả lời ngay dưới nút đó.",
+          "Read the open questions, research them, then create a connected answer shape under each asked node.",
+        en: "I can see an open question. I will research it and create a connected answer shape under the node you asked about.",
+        vi: "Tôi thấy câu hỏi đang mở. Tôi sẽ tìm hiểu rồi tạo một hình chứa câu trả lời được nối với nút bạn đã hỏi.",
       },
       answered: {
         next_step:
-          "Ask the person to review, drag, edit, or delete the new answer, then continue with another question.",
-        en: "The answer is on the map. Please correct it by hand if needed, or pin the next question.",
-        vi: "Câu trả lời đã nằm trên sơ đồ. Bạn có thể sửa trực tiếp hoặc cắm dấu hỏi tiếp theo.",
+          "Ask the person to review, drag, edit, delete, or undo the connected answer shape, then continue with another question.",
+        en: "The connected answer shape is on the map. Correct it by hand if needed, or pin the next question.",
+        vi: "Hình chứa câu trả lời đã nối vào sơ đồ. Bạn có thể sửa trực tiếp hoặc cắm dấu hỏi tiếp theo.",
       },
     }[state];
     checkAbort(context.signal);
     return success({
       what_this_is:
-        "Study Map turns anything you are learning into a map you and ChatGPT draw together.",
+        "Study Map turns learning into a shared diagram where every answered question grows a connected mind map.",
       workflow: [
         "Name a topic, paste text, or drop a PDF.",
         "ChatGPT draws the study map.",
         "Pin a question mark on any node.",
-        "ChatGPT answers inside the map.",
-        "Correct the map by hand and repeat.",
+        "ChatGPT creates an answer shape connected to the asked node.",
+        "Drag, edit, delete, or undo it; repeat to grow the mind map.",
       ],
       human_only: [
         "Pin or edit a question mark",
@@ -291,7 +291,7 @@ export const createStudyQuestionController = (
         "get_chart: read the bounded live outline",
         "get_selection: inspect selected study nodes",
         "list_questions: find open question marks",
-        "answer_question: write a researched answer under its node",
+        "answer_question: create an answer shape connected to its questioned node",
       ],
     });
   };

@@ -49,4 +49,30 @@ describe("Study Map public identity", () => {
     expect(retrofit.slice(0, 1200)).toContain("Study Map");
     expect(readme).toContain("fork of [Excalidraw]");
   });
+
+  it("docks the question panel away from the bottom-right Agent layout", () => {
+    const studyStyles = read("excalidraw-app/webmcp/study/StudyMapPanel.scss");
+    const agentStyles = read("excalidraw-app/webmcp/RetrofitPanel.scss");
+    const desktop = studyStyles.slice(
+      studyStyles.indexOf(".study-map__question-panel"),
+      studyStyles.indexOf("@media"),
+    );
+    const narrow = studyStyles.slice(studyStyles.indexOf("@media"));
+    const agentRuleStart = agentStyles.indexOf(".webmcp-retrofit {");
+    const agentDesktop = agentStyles.slice(
+      agentRuleStart,
+      agentStyles.indexOf("  header,", agentRuleStart),
+    );
+
+    expect(agentStyles).toMatch(
+      /\.webmcp-retrofit\s*\{[\s\S]*?right:\s*1rem;[\s\S]*?bottom:\s*1rem;/u,
+    );
+    expect(agentDesktop).toMatch(/box-sizing:\s*border-box;/u);
+    expect(desktop).toMatch(/left:\s*0\.75rem;/u);
+    expect(desktop).toMatch(/right:\s*auto;/u);
+    expect(desktop).toMatch(/bottom:\s*4\.1rem;/u);
+    expect(narrow).toMatch(
+      /\.study-map__question-panel\s*\{[\s\S]*?top:\s*8\.5rem;[\s\S]*?right:\s*auto;[\s\S]*?bottom:\s*auto;/u,
+    );
+  });
 });

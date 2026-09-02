@@ -202,7 +202,35 @@ describe("Study Map study-question controller", () => {
           (result as unknown as { say_to_user: object }).say_to_user,
         ),
       ).toBe(true);
+
+      const guide = result as unknown as {
+        what_this_is: string;
+        workflow: string[];
+        tools: string[];
+      };
+      expect(guide.what_this_is).toMatch(/mind map/i);
+      expect(guide.workflow.join(" ")).toMatch(/answer shape/i);
+      expect(guide.workflow.join(" ")).toMatch(/connect(?:ed|s).*asked node/i);
+      expect(guide.tools.join(" ")).toMatch(
+        /answer_question:.*answer shape.*connect(?:ed|s).*questioned node/i,
+      );
     }
+
+    const waitingGuide = waiting as unknown as {
+      next_step: string;
+      say_to_user: { en: string; vi: string };
+    };
+    expect(waitingGuide.next_step).toMatch(/connected answer shape/i);
+    expect(waitingGuide.say_to_user.en).toMatch(/connected answer shape/i);
+    expect(waitingGuide.say_to_user.vi).toMatch(/hình.*câu trả lời.*nối/i);
+
+    const answeredGuide = answered as unknown as {
+      next_step: string;
+      say_to_user: { en: string; vi: string };
+    };
+    expect(answeredGuide.next_step).toMatch(/connected answer shape/i);
+    expect(answeredGuide.say_to_user.en).toMatch(/connected answer shape/i);
+    expect(answeredGuide.say_to_user.vi).toMatch(/hình.*câu trả lời.*đã nối/i);
     await expect(
       controller.executeTool(
         "how_to_use",

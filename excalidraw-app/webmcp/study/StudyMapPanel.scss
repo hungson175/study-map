@@ -142,8 +142,9 @@
 
 .study-map__question-panel {
   position: fixed;
-  right: 0.75rem;
+  right: auto;
   bottom: 4.1rem;
+  left: 0.75rem;
   z-index: 16;
   display: grid;
   width: min(22rem, calc(100vw - 1.5rem));
@@ -210,8 +211,10 @@
   }
 
   .study-map__question-panel {
-    right: 0.5rem;
-    bottom: 3.5rem;
+    top: 8.5rem;
+    right: auto;
+    bottom: auto;
+    left: 0.5rem;
     width: calc(100vw - 1rem);
   }
 }

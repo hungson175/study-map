@@ -23,7 +23,7 @@
 }
 
 .study-map__welcome-card {
-  width: min(48rem, 100%);
+  width: min(42rem, 100%);
   box-sizing: border-box;
   padding: clamp(1.25rem, 5vw, 3rem);
   border: 1px solid rgb(86 78 126 / 18%);
@@ -32,11 +32,11 @@
   box-shadow: 0 2rem 6rem rgb(42 35 82 / 18%);
 
   h1 {
-    max-width: 42rem;
+    max-width: 34rem;
     margin: 0;
-    font-size: clamp(2.4rem, 7vw, 5.8rem);
-    line-height: 0.98;
-    letter-spacing: -0.06em;
+    font-size: clamp(2.25rem, 6vw, 4rem);
+    line-height: 1;
+    letter-spacing: -0.05em;
   }
 
   button {
@@ -68,25 +68,11 @@
   text-transform: uppercase;
 }
 
-.study-map__tagline {
-  max-width: 36rem;
-  margin: 1rem 0 1.5rem;
-  color: #666075;
-  font-size: 1.12rem;
-}
-
 .study-map__start-explainer {
   max-width: 36rem;
-  margin: 0 0 1rem;
+  margin: 1rem 0;
   color: #403a50;
   font-size: 1rem;
-}
-
-.study-map__start-label {
-  margin: 0 0 0.45rem;
-  color: #27223b;
-  font-size: 0.9rem;
-  font-weight: 800;
 }
 
 .study-map__start-prompt {
@@ -99,12 +85,6 @@
   color: #27223b;
   line-height: 1.45;
   user-select: text;
-}
-
-.study-map__model-note {
-  margin: -0.25rem 0 1rem;
-  color: #666075;
-  font-size: 0.84rem;
 }
 
 .study-map__welcome-actions {

@@ -74,7 +74,9 @@ describe("RetrofitPanel", () => {
       <RetrofitPanel api={api as never} controller={controller} />,
     );
 
-    await waitFor(() => expect(screen.getByText("LOCAL ONLY")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("WEBMCP UNAVAILABLE")).toBeTruthy(),
+    );
     expect(screen.getByText("UNCOMMITTED")).toBeTruthy();
     expect(container.querySelectorAll("[data-ghost='true']")).toHaveLength(2);
     expect(container.querySelector("[data-ghost-overlay='true']")).toHaveStyle({

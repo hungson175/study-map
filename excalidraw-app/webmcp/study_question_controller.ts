@@ -227,55 +227,65 @@ export const createStudyQuestionController = (
     const elements = liveElements();
     const nodes = liveStudyNodes(elements);
     const openQuestions = validOpenQuestions(elements);
-    const hasAnswers = elements.some(
-      (element) =>
-        !element.isDeleted &&
-        isRecord(element.customData) &&
-        element.customData.kind === "answer",
+    const labelsById = new Map(
+      nodes.map((node) => [node.id, textFor(node.id, elements)]),
     );
+    const openTargetLabel = openQuestions.length
+      ? labelsById.get(questionData(openQuestions[0])!.nodeId)
+      : undefined;
+    let answeredTargetLabel: string | undefined;
+    for (let index = elements.length - 1; index >= 0; index--) {
+      const element = elements[index];
+      const data = questionData(element);
+      if (
+        !element.isDeleted &&
+        isQuestionMarker(element) &&
+        data?.status === "answered"
+      ) {
+        answeredTargetLabel = labelsById.get(data.nodeId);
+        if (answeredTargetLabel) {
+          break;
+        }
+      }
+    }
     const state =
       nodes.length === 0
         ? "empty"
         : openQuestions.length > 0
         ? "waiting"
-        : hasAnswers
-        ? "answered"
-        : "chart";
+        : "map";
     const guidance = {
       empty: {
         next_step:
-          "Ask what the person is learning, then draw a small first map from their topic or source.",
-        en: "What are you learning today? Name a topic, paste text, or drop a PDF and I will map it with you.",
-        vi: "Hôm nay bạn muốn học gì? Hãy nêu chủ đề, dán văn bản hoặc thả PDF để tôi cùng bạn vẽ sơ đồ.",
+          "Ask what they are learning. If they have a paper, article or notes, ask them to attach it to this chat; you read it yourself, this page does not. Then draw a small first map, five nodes at most, with short labels, and stop so they can react.",
+        say_to_user:
+          "Tell me what you're learning, or attach a paper, and I'll draw it as a map on this page. Move anything by hand, and put a ? on whatever you want me to dig into.",
       },
-      chart: {
+      map: {
         next_step:
-          "Invite the person to pin a question mark on the node they want to understand next.",
-        en: "Choose any node you want to understand better, then pin a question mark and type your question.",
-        vi: "Hãy chọn nút bạn muốn hiểu thêm, cắm dấu hỏi rồi nhập câu hỏi của bạn.",
+          "Invite them to check it, drag it, rewrite it or undo it, then continue from their version.",
+        say_to_user: answeredTargetLabel
+          ? `I added an answer under “${answeredTargetLabel}” — check it, drag or rewrite it if you like, then tell me what to explore next.`
+          : "Your map is ready — drag or rewrite anything, then put a ? on the next node you want me to dig into.",
       },
       waiting: {
         next_step:
-          "Read the open questions, research them, then create a connected answer shape under each asked node.",
-        en: "I can see an open question. I will research it and create a connected answer shape under the node you asked about.",
-        vi: "Tôi thấy câu hỏi đang mở. Tôi sẽ tìm hiểu rồi tạo một hình chứa câu trả lời được nối với nút bạn đã hỏi.",
-      },
-      answered: {
-        next_step:
-          "Ask the person to review, drag, edit, delete, or undo the connected answer shape, then continue with another question.",
-        en: "The connected answer shape is on the map. Correct it by hand if needed, or pin the next question.",
-        vi: "Hình chứa câu trả lời đã nối vào sơ đồ. Bạn có thể sửa trực tiếp hoặc cắm dấu hỏi tiếp theo.",
+          "Read the open questions, research them yourself, then write a short answer as a connected shape under the node that was asked about, and add the source. Do not answer in chat only.",
+        say_to_user: openTargetLabel
+          ? `You asked about “${openTargetLabel}” — I'll research it and put the answer under that node.`
+          : "I found your open question — I'll research it and put the answer under that node.",
       },
     }[state];
     checkAbort(context.signal);
     return success({
+      state,
       what_this_is:
-        "Study Map turns learning into a shared diagram where every answered question grows a connected mind map.",
+        "A canvas where you and the person build a map of whatever they are learning. You draw it, they correct it by hand, and their questions live on the map.",
       workflow: [
-        "Name a topic, paste text, or drop a PDF.",
-        "ChatGPT draws the study map.",
+        "Read the learning material from the conversation, not from this page.",
+        "Draw a small first study map.",
         "Pin a question mark on any node.",
-        "ChatGPT creates an answer shape connected to the asked node.",
+        "Create an answer shape connected to the asked node.",
         "Drag, edit, delete, or undo it; repeat to grow the mind map.",
       ],
       human_only: [
@@ -285,7 +295,7 @@ export const createStudyQuestionController = (
         "Export",
       ],
       next_step: guidance.next_step,
-      say_to_user: { en: guidance.en, vi: guidance.vi },
+      say_to_user: guidance.say_to_user,
       tools: [
         "how_to_use: call first and after the map changes",
         "get_chart: read the bounded live outline",
@@ -626,7 +636,7 @@ export const createStudyQuestionController = (
     {
       name: "how_to_use",
       description:
-        "Start here: how this study map works and what to do next with the person, given the live canvas.",
+        "Start here before any other tool. What this page is, what the person can do by hand, and what to do next given what is on the canvas right now.",
       inputSchema: toolSchema({}, []),
       annotations: { readOnlyHint: true },
       execute: howToUse,

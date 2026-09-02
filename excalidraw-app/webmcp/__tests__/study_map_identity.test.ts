@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "../../..");
 const read = (relative: string) =>
   fs.readFileSync(path.join(root, relative), "utf8");
+const VERSION_B_PROMPT =
+  "I attached a paper. I am a software engineer learning about LLMs. Open Study Map in your built-in browser, call how_to_use first, and map this paper for me.";
 
 describe("Study Map public identity", () => {
   it("mounts the study registration before the two retained seed surfaces", () => {
@@ -72,6 +74,51 @@ describe("Study Map public identity", () => {
       "project/hackathon-hunter/reports/evidence/study-map-m2/native-drag-question-answer-f2c4cecd.json",
     );
     expect(readme).not.toContain("remain unproven");
+  });
+
+  it("uses one shared Version B prompt and removes the dead source path", () => {
+    const promptPath = path.join(
+      root,
+      "excalidraw-app/webmcp/study/study_map_prompt.ts",
+    );
+    const panel = read("excalidraw-app/webmcp/study/StudyMapPanel.tsx");
+    const shell = read("excalidraw-app/webmcp/product/ProductShell.tsx");
+    const controller = read(
+      "excalidraw-app/webmcp/study_question_controller.ts",
+    );
+
+    expect(fs.existsSync(promptPath)).toBe(true);
+    const prompt = fs.existsSync(promptPath)
+      ? fs.readFileSync(promptPath, "utf8")
+      : "";
+    expect(prompt).toContain(VERSION_B_PROMPT);
+    expect(panel).toContain('from "./study_map_prompt"');
+    expect(shell).toContain('from "../study/study_map_prompt"');
+    expect(panel).not.toContain(VERSION_B_PROMPT);
+    expect(shell).not.toContain(VERSION_B_PROMPT);
+    expect(panel).not.toMatch(
+      /PdfMetadata|MAX_PASTE_LENGTH|sanitizePdf|acceptPdf|type="file"|Drop a PDF|Paste what you are learning|reading comes next|Open a blank study map/u,
+    );
+    expect(controller).not.toMatch(/get_source|PDF\.js|FileReader/u);
+  });
+
+  it("removes false privacy claims from Study Map public surfaces", () => {
+    const publicCopy = [
+      read("README.md"),
+      read("RETROFIT.md"),
+      read("artifacts/retrofit-cost-ledger/generate_retrofit_md.py"),
+      read("excalidraw-app/webmcp/study/StudyMapPanel.tsx"),
+      read("excalidraw-app/webmcp/RetrofitPanel.tsx"),
+      read("excalidraw-app/webmcp/product/ProductShell.tsx"),
+      read("excalidraw-app/webmcp/study_question_controller.ts"),
+    ].join("\n");
+
+    expect(publicCopy).not.toMatch(
+      /never leaves(?: your machine)?|\bprivate\b|local[ -]only|LOCAL TO THIS BROWSER|Nothing is sent to a server|Maps and files stay in the browser/iu,
+    );
+    expect(publicCopy).not.toMatch(
+      /Name a topic, paste notes|paste text, or drop a PDF|choose a local PDF|welcome stores pasted text|PDF metadata only/u,
+    );
   });
 
   it("removes the old judge-visible product identity while retaining attribution", () => {

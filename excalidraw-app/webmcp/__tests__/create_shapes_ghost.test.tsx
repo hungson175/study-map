@@ -42,7 +42,9 @@ describe("create_shapes ghost preview", () => {
     const view = render(
       <RetrofitPanel api={api as never} controller={controller} />,
     );
-    await waitFor(() => expect(screen.getByText("LOCAL ONLY")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("WEBMCP UNAVAILABLE")).toBeTruthy(),
+    );
     const overlay = view.container.querySelector("[data-ghost-overlay='true']");
     expect(overlay?.querySelectorAll("rect[data-ghost='true']")).toHaveLength(
       1,

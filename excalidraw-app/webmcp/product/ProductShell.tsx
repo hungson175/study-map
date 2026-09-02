@@ -19,6 +19,7 @@ import {
   type WebMCPToolActivity,
 } from "../tool_activity";
 import { createWebMCPRegistration } from "../webmcp_adapter";
+import { STUDY_MAP_START_PROMPT } from "../study/study_map_prompt";
 
 import { createCanvasToolController } from "./canvas_tools";
 import {
@@ -67,9 +68,6 @@ const safeFilename = (name: string) =>
       .replace(/^-|-$/gu, "")
       .slice(0, 60) || "study-map"
   }.png`;
-
-const CHATGPT_DEMO_PROMPT =
-  "Open Study Map at https://hungson175.github.io/study-map/ in your built-in browser. Call how_to_use first, then help me learn by drawing and answering inside the map.";
 
 export const ProductShell = ({
   api,
@@ -357,7 +355,7 @@ export const ProductShell = ({
       return;
     }
     try {
-      await clipboard.writeText(CHATGPT_DEMO_PROMPT);
+      await clipboard.writeText(STUDY_MAP_START_PROMPT);
       setPromptCopied(true);
       setStatus("Prompt copied");
     } catch {
@@ -416,11 +414,11 @@ export const ProductShell = ({
           aria-labelledby="diagram-library-title"
         >
           <header>
-            <p className="product-shell__eyebrow">LOCAL TO THIS BROWSER</p>
+            <p className="product-shell__eyebrow">NO STUDY MAP BACKEND</p>
             <h1 id="diagram-library-title">Your study maps</h1>
             <p>
-              Open, rename, or delete your saved work. Nothing is sent to a
-              server.
+              Open, rename, or delete maps saved in this browser. Agent tool
+              results go to the model provider when invoked.
             </p>
           </header>
           {diagrams.length ? (
@@ -527,7 +525,7 @@ export const ProductShell = ({
             aria-labelledby="save-title"
           >
             <h2 id="save-title">Save this study map</h2>
-            <p>Stored only in this browser. You can rename it later.</p>
+            <p>Saved in this browser until you share or export it.</p>
             <label>
               <span>Study map name</span>
               <input

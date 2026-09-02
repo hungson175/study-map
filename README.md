@@ -6,13 +6,13 @@ Learn anything as a map you and ChatGPT draw together. Pin a question mark to a 
 
 ## The study loop
 
-1. Name a topic, paste notes, or choose a local PDF.
-2. Ask ChatGPT to call `how_to_use` first and draw a small study map.
+1. Attach a paper or notes in ChatGPT and copy the start prompt from Study Map.
+2. ChatGPT calls `how_to_use` first, reads the attachment itself, and draws a small study map.
 3. Select a node and pin a question with **? Ask about selected node**.
 4. ChatGPT calls `list_questions` and `answer_question`; the answer lands under that node as ordinary undoable elements.
 5. Correct the map by hand and continue with another question.
 
-The welcome stores pasted text and PDF metadata only in local page state in this build; it does not claim to parse or upload a PDF. Maps and files stay in the browser. There is no Study Map account or backend.
+The page does not accept a topic, pasted text, or PDF. Study Map has no backend of its own. Saved map copies remain in the browser unless the person shares or exports them; bounded WebMCP tool results go to the model provider when the agent invokes them.
 
 ## WebMCP surface
 

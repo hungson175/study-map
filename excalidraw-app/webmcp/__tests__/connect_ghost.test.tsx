@@ -80,7 +80,9 @@ describe("connector ghost preview", () => {
       <RetrofitPanel api={api as never} controller={controller} />,
     );
 
-    await waitFor(() => expect(screen.getByText("LOCAL ONLY")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("WEBMCP UNAVAILABLE")).toBeTruthy(),
+    );
     expect(screen.getByText("UNCOMMITTED")).toBeTruthy();
     expect(
       container.querySelector(".webmcp-retrofit > p")?.textContent,

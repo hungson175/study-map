@@ -47,7 +47,7 @@ Pinned snapshot: upstream `e1bb9ff8` → audited public product `59ca1586`. The 
 
 - **Eight host-facing product files.** The app mount changed by two lines, the Origin Trial tag added four, and the static-host base added two. The rest is an isolated panel, typed registry, adapter, and controller under `excalidraw-app/webmcp/`.
 - **Four composable tools.** `select_shapes` feeds `align_shapes`, `equalize_size`, and `connect_shapes`. Later calls read the pending projection, not stale canonical geometry.
-- **Public host seams only.** The retrofit uses `ExcalidrawImperativeAPI`, one exported `convertToExcalidrawElements` call for the complete binding graph, and `updateScene` as a storage boundary. It does not mutate a private scene store.
+- **Public host seams only.** The retrofit uses `ExcalidrawImperativeAPI`, one exported `convertToExcalidrawElements` call for the complete binding graph, and `updateScene` as a storage boundary. It does not mutate an undocumented scene store.
 - **Progressive browser registration.** Unsupported browsers retain normal Excalidraw and register nothing. An owned `AbortSignal` prevents a partial or stale tool lifetime.
 
 ## The safety boundary is visible
@@ -63,7 +63,7 @@ In stock Chrome 154 with no WebMCP flags or injection, the live page exposed exa
 
 ## Why this belongs in the page, not an extension
 
-An extension could reach private app internals in the main world, but it would break with host releases and need a different extension for every app. This retrofit is shipped by the page against explicit seams—the friction a shared browser standard is meant to remove.
+An extension could reach undocumented app internals in the main world, but it would break with host releases and need a different extension for every app. This retrofit is shipped by the page against explicit seams—the friction a shared browser standard is meant to remove.
 
 ## Reproduce this page
 

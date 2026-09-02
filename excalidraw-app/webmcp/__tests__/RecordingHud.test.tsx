@@ -84,7 +84,9 @@ describe("RecordingHud", () => {
     render(<RetrofitPanel api={api as never} controller={controller} />);
     expect(screen.getByTestId("film-hud")).toBeTruthy();
     expect(screen.getByLabelText("Agent layout preview")).toBeTruthy();
-    await waitFor(() => expect(screen.getByText("LOCAL ONLY")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("WEBMCP UNAVAILABLE")).toBeTruthy(),
+    );
   });
 
   it("renders only live derived counts and updates on parent rerender", () => {

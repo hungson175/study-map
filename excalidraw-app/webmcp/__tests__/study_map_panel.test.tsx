@@ -16,6 +16,10 @@ import {
 } from "../study/StudyMapPanel";
 import { ProductShell } from "../product/ProductShell";
 import { RetrofitPanel } from "../RetrofitPanel";
+import { WEBMCP_TOOL_ACTIVITY_EVENT } from "../tool_activity";
+
+const VERSION_B_PROMPT =
+  "I attached a paper. I am a software engineer learning about LLMs. Open Study Map in your built-in browser, call how_to_use first, and map this paper for me.";
 
 const studyToolNames = [
   "how_to_use",
@@ -115,7 +119,7 @@ afterEach(() => {
 });
 
 describe("Study Map panel", () => {
-  it("starts with a study welcome and dismisses without changing the scene", async () => {
+  it("shows one honest Version B start card and no source-ingestion controls", async () => {
     const fixture = makeApi();
     render(
       <StudyMapPanel
@@ -132,20 +136,18 @@ describe("Study Map panel", () => {
         "Learn anything as a map you and ChatGPT draw together.",
       ),
     ).toBeTruthy();
-    expect(screen.getByLabelText("Paste what you are learning")).toBeTruthy();
-    expect(screen.getByLabelText("Choose a PDF")).toHaveAttribute(
-      "accept",
-      ".pdf,application/pdf",
-    );
     expect(
-      screen.getByRole("button", { name: "Talk to ChatGPT" }),
+      screen.getByText(
+        "Attach your paper in ChatGPT. Study Map is the canvas it can draw on with you.",
+      ),
     ).toBeTruthy();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open a blank study map" }),
-    );
+    expect(screen.getByText(VERSION_B_PROMPT)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeTruthy();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByText(/Drop a PDF/i)).toBeNull();
     expect(
-      screen.queryByRole("heading", { name: "What are you learning today?" }),
+      screen.queryByRole("button", { name: "Open a blank study map" }),
     ).toBeNull();
     expect(fixture.updateScene).not.toHaveBeenCalled();
     expect(fixture.api.getFiles).not.toHaveBeenCalled();
@@ -154,10 +156,14 @@ describe("Study Map panel", () => {
     ).toBeTruthy();
   });
 
-  it("bounds pasted text and records only sanitized PDF metadata", async () => {
+  it("copies the single canonical attached-paper sentence", async () => {
+    window.history.replaceState({}, "", "/study-map/");
+    const writeText = vi.fn(async (_value: string) => undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     const fixture = makeApi();
-    const fileReader = vi.fn();
-    vi.stubGlobal("FileReader", fileReader);
     render(
       <StudyMapPanel
         api={fixture.api as never}
@@ -165,55 +171,76 @@ describe("Study Map panel", () => {
       />,
     );
 
-    const paste = screen.getByLabelText(
-      "Paste what you are learning",
-    ) as HTMLTextAreaElement;
-    fireEvent.change(paste, { target: { value: "x".repeat(5000) } });
-    expect(paste.value).toHaveLength(4000);
-
-    const pdf = new File(["not read"], "vua Đinh?.pdf", {
-      type: "application/pdf",
-    });
-    fireEvent.change(screen.getByLabelText("Choose a PDF"), {
-      target: { files: [pdf] },
-    });
-    expect(screen.getByText(/vua__inh_.pdf/)).toBeTruthy();
-    expect(screen.getByText(new RegExp(`${pdf.size} bytes`))).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText).toHaveBeenCalledWith(VERSION_B_PROMPT);
+    expect(fixture.updateScene).not.toHaveBeenCalled();
     expect(fixture.api.getFiles).not.toHaveBeenCalled();
-    expect(fileReader).not.toHaveBeenCalled();
-    expect(
-      await screen.findByText(/WebMCP (unavailable|count unavailable)/),
-    ).toBeTruthy();
   });
 
-  it("rejects non-PDF input without reading it", async () => {
+  it("dismisses the card on mounted-document tool activity without touching the scene", async () => {
     const fixture = makeApi();
-    const fileReader = vi.fn();
-    vi.stubGlobal("FileReader", fileReader);
-    render(
+    const view = render(
       <StudyMapPanel
         api={fixture.api as never}
         controller={makeController() as never}
       />,
     );
+    const root = screen.getByTestId("study-map-panel");
+    const ownerDocument = root.ownerDocument;
+    const remove = vi.spyOn(ownerDocument, "removeEventListener");
 
-    fireEvent.change(screen.getByLabelText("Choose a PDF"), {
-      target: {
-        files: [new File(["plain"], "notes.txt", { type: "text/plain" })],
-      },
+    act(() => {
+      ownerDocument.dispatchEvent(
+        new CustomEvent(WEBMCP_TOOL_ACTIVITY_EVENT, {
+          detail: { state: "running", tool: "create_shapes" },
+        }),
+      );
     });
-    expect(screen.getByRole("status")).toHaveTextContent("Choose one PDF");
-    expect(fileReader).not.toHaveBeenCalled();
-    expect(fixture.api.getFiles).not.toHaveBeenCalled();
     expect(
-      await screen.findByText(/WebMCP (unavailable|count unavailable)/),
-    ).toBeTruthy();
+      screen.queryByRole("heading", { name: "What are you learning today?" }),
+    ).toBeNull();
+    expect(fixture.updateScene).not.toHaveBeenCalled();
+    expect(fixture.api.getFiles).not.toHaveBeenCalled();
+
+    view.unmount();
+    expect(remove).toHaveBeenCalledWith(
+      WEBMCP_TOOL_ACTIVITY_EVENT,
+      expect.any(Function),
+    );
   });
 
-  it("accepts a dropped PDF through the same metadata-only seam", async () => {
+  it("keeps the card for malformed or non-running activity", () => {
     const fixture = makeApi();
-    const fileReader = vi.fn();
-    vi.stubGlobal("FileReader", fileReader);
+    render(
+      <StudyMapPanel
+        api={fixture.api as never}
+        controller={makeController() as never}
+      />,
+    );
+    const ownerDocument = screen.getByTestId("study-map-panel").ownerDocument;
+
+    for (const detail of [
+      null,
+      {},
+      { state: "idle", tool: "create_shapes" },
+      { state: "running", tool: "" },
+    ]) {
+      act(() => {
+        ownerDocument.dispatchEvent(
+          new CustomEvent(WEBMCP_TOOL_ACTIVITY_EVENT, { detail }),
+        );
+      });
+    }
+    expect(
+      screen.getByRole("heading", { name: "What are you learning today?" }),
+    ).toBeTruthy();
+    expect(fixture.updateScene).not.toHaveBeenCalled();
+    expect(fixture.api.getFiles).not.toHaveBeenCalled();
+  });
+
+  it("has no PDF or source handler seam in the rendered card", () => {
+    const fixture = makeApi();
     render(
       <StudyMapPanel
         api={fixture.api as never}
@@ -221,20 +248,36 @@ describe("Study Map panel", () => {
       />,
     );
 
-    const pdf = new File(["still not read"], "lesson?.pdf", {
-      type: "application/pdf",
-    });
-    const dropZone = screen.getByText("Drop a PDF").closest("label");
-    expect(dropZone).toBeTruthy();
-    fireEvent.drop(dropZone!, { dataTransfer: { files: [pdf] } });
-
-    expect(screen.getByText(/lesson_.pdf/)).toBeTruthy();
-    expect(screen.getByText(new RegExp(`${pdf.size} bytes`))).toBeTruthy();
-    expect(fileReader).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Choose a PDF")).toBeNull();
+    expect(screen.queryByLabelText("Paste what you are learning")).toBeNull();
+    expect(screen.queryByText(/reading comes next/i)).toBeNull();
+    expect(screen.queryByText(/bytes/)).toBeNull();
     expect(fixture.api.getFiles).not.toHaveBeenCalled();
-    expect(
-      await screen.findByText(/WebMCP (unavailable|count unavailable)/),
-    ).toBeTruthy();
+  });
+
+  it("ignores a rejecting clipboard without changing the canvas", async () => {
+    const fixture = makeApi();
+    const writeText = vi.fn(async (_value: string) => {
+      throw new Error("denied");
+    });
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <StudyMapPanel
+        api={fixture.api as never}
+        controller={makeController() as never}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Copy unavailable"),
+    );
+    expect(writeText).toHaveBeenCalledWith(VERSION_B_PROMPT);
+    expect(fixture.updateScene).not.toHaveBeenCalled();
+    expect(fixture.api.getFiles).not.toHaveBeenCalled();
   });
 
   it("keeps all sixteen sibling tools while how_to_use is attempted first", async () => {
@@ -403,7 +446,7 @@ describe("Study Map panel", () => {
     expect(getTools).toHaveBeenCalledOnce();
   });
 
-  it("copies a live-origin prompt that tells the agent to call how_to_use first", async () => {
+  it("copies the same Version B prompt from the mounted page", async () => {
     window.history.replaceState({}, "", "/study-map/");
     const writeText = vi.fn(async (_value: string) => undefined);
     Object.defineProperty(window.navigator, "clipboard", {
@@ -417,12 +460,10 @@ describe("Study Map panel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Talk to ChatGPT" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
-    expect(writeText.mock.calls[0][0]).toContain("Study Map");
-    expect(writeText.mock.calls[0][0]).toContain("/study-map/");
-    expect(writeText.mock.calls[0][0]).toMatch(/call how_to_use first/i);
+    expect(writeText.mock.calls[0][0]).toBe(VERSION_B_PROMPT);
   });
 
   it("fails a missing or rejecting clipboard without leaking the study input", async () => {
@@ -437,7 +478,7 @@ describe("Study Map panel", () => {
         controller={makeController() as never}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Talk to ChatGPT" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
     expect(screen.getByRole("status")).toHaveTextContent("Copy unavailable");
     first.unmount();
 
@@ -454,7 +495,7 @@ describe("Study Map panel", () => {
         controller={makeController() as never}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Talk to ChatGPT" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Copy unavailable"),
     );

@@ -112,7 +112,8 @@ describe("Study Map study-question controller", () => {
       "answer_question",
     ]);
     expect(tools[0]).toMatchObject({
-      description: expect.stringMatching(/^Start here:/),
+      description:
+        "Start here before any other tool. What this page is, what the person can do by hand, and what to do next given what is on the canvas right now.",
       annotations: { readOnlyHint: true },
     });
     expect(tools.map(({ annotations }) => annotations.readOnlyHint)).toEqual([
@@ -134,7 +135,7 @@ describe("Study Map study-question controller", () => {
     ).toBe(true);
   });
 
-  it("returns a bounded bilingual how_to_use guide grounded in four live states", async () => {
+  it("returns a bounded single-English how_to_use guide grounded in three states", async () => {
     const fixture = makeApi();
     const controller = createStudyQuestionController(
       fixture.api as never,
@@ -145,7 +146,7 @@ describe("Study Map study-question controller", () => {
 
     const empty = await run();
     fixture.setElements(makeElements([node("dynasty", "Đinh Bộ Lĩnh")]));
-    const chart = await run();
+    const map = await run();
     fixture.setElements([
       ...fixture.getElements(),
       ...questionElements(
@@ -174,63 +175,78 @@ describe("Study Map study-question controller", () => {
     ]);
     const answered = await run();
 
-    const steps = [empty, chart, waiting, answered].map(
-      (result) => (result as unknown as { next_step: string }).next_step,
+    const states = [empty, map, waiting, answered].map(
+      (result) => (result as unknown as { state: string }).state,
     );
-    expect(new Set(steps).size).toBe(4);
-    for (const result of [empty, chart, waiting, answered]) {
-      expect(result).toMatchObject({
-        ok: true,
-        what_this_is: expect.stringContaining("Study Map"),
-        workflow: expect.any(Array),
-        human_only: expect.any(Array),
-        next_step: expect.any(String),
-        say_to_user: {
-          en: expect.any(String),
-          vi: expect.stringMatching(/[ăâđêôơưạảấầậẩẫ]/i),
-        },
-        tools: expect.any(Array),
-      });
+    expect(states).toEqual(["empty", "map", "waiting", "map"]);
+    expect(new Set(states).size).toBe(3);
+
+    const emptyGuide = empty as unknown as {
+      what_this_is: string;
+      next_step: string;
+      say_to_user: string;
+    };
+    expect(emptyGuide).toMatchObject({
+      what_this_is:
+        "A canvas where you and the person build a map of whatever they are learning. You draw it, they correct it by hand, and their questions live on the map.",
+      next_step:
+        "Ask what they are learning. If they have a paper, article or notes, ask them to attach it to this chat; you read it yourself, this page does not. Then draw a small first map, five nodes at most, with short labels, and stop so they can react.",
+      say_to_user:
+        "Tell me what you're learning, or attach a paper, and I'll draw it as a map on this page. Move anything by hand, and put a ? on whatever you want me to dig into.",
+    });
+
+    const waitingGuide = waiting as unknown as {
+      next_step: string;
+      say_to_user: string;
+    };
+    expect(waitingGuide.next_step).toBe(
+      "Read the open questions, research them yourself, then write a short answer as a connected shape under the node that was asked about, and add the source. Do not answer in chat only.",
+    );
+    expect(waitingGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
+    expect(waitingGuide.say_to_user).toMatch(/answer.*under that node/i);
+
+    const mapGuide = map as unknown as {
+      next_step: string;
+      say_to_user: string;
+    };
+    expect(mapGuide.next_step).toBe(
+      "Invite them to check it, drag it, rewrite it or undo it, then continue from their version.",
+    );
+    expect(mapGuide.say_to_user).toMatch(/map is ready/i);
+    expect(mapGuide.say_to_user).toMatch(/drag or rewrite/i);
+
+    const answeredGuide = answered as unknown as {
+      state: string;
+      say_to_user: string;
+    };
+    expect(answeredGuide.state).toBe("map");
+    expect(answeredGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
+    expect(answeredGuide.say_to_user).toMatch(/check it.*drag or rewrite/i);
+
+    for (const result of [empty, map, waiting, answered]) {
+      const guide = result as unknown as {
+        what_this_is: string;
+        next_step: string;
+        say_to_user: string;
+      };
+      expect(typeof guide.say_to_user).toBe("string");
+      expect(guide.say_to_user).not.toMatch(
+        /how_to_use|get_chart|get_selection|list_questions|answer_question|schema/i,
+      );
+      expect(guide.say_to_user).not.toMatch(/privacy|private|local.only/i);
+      expect(JSON.stringify(result)).not.toMatch(/"en"|"vi"/);
       const encoded = JSON.stringify(result);
-      expect(encoded.length).toBeLessThan(1536);
       expect(new TextEncoder().encode(encoded).byteLength).toBeLessThan(2000);
       expect(encoded).not.toContain("Hạng Lang mất năm nào");
       expect(encoded).not.toMatch(/selectedElementIds|customData|"x"|"y"/);
       expect(Object.isFrozen(result)).toBe(true);
-      expect(
-        Object.isFrozen(
-          (result as unknown as { say_to_user: object }).say_to_user,
-        ),
-      ).toBe(true);
-
-      const guide = result as unknown as {
-        what_this_is: string;
-        workflow: string[];
-        tools: string[];
-      };
-      expect(guide.what_this_is).toMatch(/mind map/i);
-      expect(guide.workflow.join(" ")).toMatch(/answer shape/i);
-      expect(guide.workflow.join(" ")).toMatch(/connect(?:ed|s).*asked node/i);
-      expect(guide.tools.join(" ")).toMatch(
-        /answer_question:.*answer shape.*connect(?:ed|s).*questioned node/i,
-      );
     }
 
-    const waitingGuide = waiting as unknown as {
-      next_step: string;
-      say_to_user: { en: string; vi: string };
-    };
-    expect(waitingGuide.next_step).toMatch(/connected answer shape/i);
-    expect(waitingGuide.say_to_user.en).toMatch(/connected answer shape/i);
-    expect(waitingGuide.say_to_user.vi).toMatch(/hình.*câu trả lời.*nối/i);
-
-    const answeredGuide = answered as unknown as {
-      next_step: string;
-      say_to_user: { en: string; vi: string };
-    };
-    expect(answeredGuide.next_step).toMatch(/connected answer shape/i);
-    expect(answeredGuide.say_to_user.en).toMatch(/connected answer shape/i);
-    expect(answeredGuide.say_to_user.vi).toMatch(/hình.*câu trả lời.*đã nối/i);
+    expect(controller.listTools()[0]).toMatchObject({
+      description:
+        "Start here before any other tool. What this page is, what the person can do by hand, and what to do next given what is on the canvas right now.",
+      annotations: { readOnlyHint: true },
+    });
     await expect(
       controller.executeTool(
         "how_to_use",

@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { createStudyQuestionController } from "../study_question_controller";
+import {
+  WEBMCP_TOOL_ACTIVITY_EVENT,
+  type WebMCPToolActivity,
+} from "../tool_activity";
 import { createWebMCPRegistration } from "../webmcp_adapter";
 
+import { STUDY_MAP_START_PROMPT } from "./study_map_prompt";
 import "./StudyMapPanel.scss";
 
 type StudyController = ReturnType<typeof createStudyQuestionController>;
@@ -31,11 +36,7 @@ type QuestionForm = {
   draft: string;
 };
 
-type PdfMetadata = { name: string; size: number };
-
-const MAX_PASTE_LENGTH = 4000;
 const MAX_QUESTION_LENGTH = 280;
-const MAX_PDF_NAME_LENGTH = 80;
 const STUDY_NODE_TYPES = new Set(["rectangle", "ellipse", "diamond"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -110,16 +111,6 @@ export const submitQuestionFromHuman = (
   input: { nodeId: string; text: string },
 ) => controller.pinQuestionFromHuman(gesture, input);
 
-const sanitizePdf = (file: File): PdfMetadata | null => {
-  if (file.type !== "application/pdf" && !file.name.endsWith(".pdf")) {
-    return null;
-  }
-  const name = file.name
-    .replace(/[^A-Za-z0-9._-]/gu, "_")
-    .slice(0, MAX_PDF_NAME_LENGTH);
-  return { name: name || "source.pdf", size: file.size };
-};
-
 const observedToolCount = async (documentObject: Document) => {
   const modelContext = (
     documentObject as Document & {
@@ -157,8 +148,6 @@ export const StudyMapPanel = ({
   const [welcomeOpen, setWelcomeOpen] = useState(
     initialWelcomeOpen ?? api.getSceneElements().length === 0,
   );
-  const [paste, setPaste] = useState("");
-  const [pdf, setPdf] = useState<PdfMetadata | null>(null);
   const [question, setQuestion] = useState<QuestionForm | null>(null);
   const [status, setStatus] = useState("Ready to study");
   const [webmcpStatus, setWebmcpStatus] = useState("WebMCP checking…");
@@ -220,19 +209,31 @@ export const StudyMapPanel = ({
     };
   }, [controller, ownsController]);
 
-  const acceptPdf = (file: File | undefined) => {
-    if (!file) {
+  useLayoutEffect(() => {
+    const ownerDocument = rootRef.current?.ownerDocument;
+    if (!ownerDocument) {
       return;
     }
-    const metadata = sanitizePdf(file);
-    if (!metadata) {
-      setPdf(null);
-      setStatus("Choose one PDF file");
-      return;
-    }
-    setPdf(metadata);
-    setStatus("PDF noted locally — source reading comes next");
-  };
+    const dismissOnToolActivity = (event: Event) => {
+      const detail = (event as CustomEvent<WebMCPToolActivity>).detail;
+      if (
+        detail?.state === "running" &&
+        typeof detail.tool === "string" &&
+        detail.tool
+      ) {
+        setWelcomeOpen(false);
+      }
+    };
+    ownerDocument.addEventListener(
+      WEBMCP_TOOL_ACTIVITY_EVENT,
+      dismissOnToolActivity,
+    );
+    return () =>
+      ownerDocument.removeEventListener(
+        WEBMCP_TOOL_ACTIVITY_EVENT,
+        dismissOnToolActivity,
+      );
+  }, []);
 
   const copyTalkPrompt = async () => {
     const ownerWindow = rootRef.current?.ownerDocument.defaultView;
@@ -241,9 +242,8 @@ export const StudyMapPanel = ({
       setStatus("Copy unavailable — use the prompt shown below");
       return;
     }
-    const prompt = `Open Study Map at ${ownerWindow.location.href} in your built-in browser. Call how_to_use first, then help me learn by drawing and answering inside the map.`;
     try {
-      await clipboard.writeText(prompt);
+      await clipboard.writeText(STUDY_MAP_START_PROMPT);
       setStatus("Study prompt copied");
     } catch {
       setStatus("Copy unavailable — use the prompt shown below");
@@ -325,55 +325,13 @@ export const StudyMapPanel = ({
             <p className="study-map__tagline">
               Learn anything as a map you and ChatGPT draw together.
             </p>
-            <label className="study-map__paste">
-              <span>Paste what you are learning</span>
-              <textarea
-                aria-label="Paste what you are learning"
-                maxLength={MAX_PASTE_LENGTH}
-                value={paste}
-                onChange={(event) =>
-                  setPaste(event.currentTarget.value.slice(0, MAX_PASTE_LENGTH))
-                }
-                placeholder="A paragraph, notes, or a topic…"
-              />
-              <small>
-                {paste.length} / {MAX_PASTE_LENGTH}
-              </small>
-            </label>
-            <div className="study-map__source-actions">
-              <label
-                className="study-map__pdf"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  acceptPdf(event.dataTransfer.files[0]);
-                }}
-              >
-                <span>Drop a PDF</span>
-                <input
-                  aria-label="Choose a PDF"
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(event) =>
-                    acceptPdf(event.currentTarget.files?.[0])
-                  }
-                />
-              </label>
-              <button type="button" onClick={() => void copyTalkPrompt()}>
-                Talk to ChatGPT
-              </button>
-            </div>
-            {pdf ? (
-              <p className="study-map__pdf-note">
-                {pdf.name} · {pdf.size} bytes — kept local; reading comes next.
-              </p>
-            ) : null}
-            <button
-              className="study-map__blank"
-              type="button"
-              onClick={() => setWelcomeOpen(false)}
-            >
-              Open a blank study map
+            <p className="study-map__start-explainer">
+              Attach your paper in ChatGPT. Study Map is the canvas it can draw
+              on with you.
+            </p>
+            <p className="study-map__start-prompt">{STUDY_MAP_START_PROMPT}</p>
+            <button type="button" onClick={() => void copyTalkPrompt()}>
+              Copy prompt
             </button>
           </div>
         </section>

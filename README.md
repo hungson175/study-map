@@ -6,7 +6,7 @@ Learn anything as a map you and ChatGPT draw together. Pin a question mark to a 
 
 ## The study loop
 
-1. Attach your material in ChatGPT, then copy the start message from Study Map, or open the canvas directly for hand editing.
+1. Type what you want to learn in the **I want to learn about:** field, press **Copy message**, and paste that message into ChatGPT. Attach any material to the same conversation, or open the canvas directly for hand editing.
 2. ChatGPT calls `how_to_use` first, reads the attachment itself, and draws a small study map.
 3. Select a node and pin a question with **? Ask about selected node**.
 4. ChatGPT calls `list_questions` and `answer_question`; the answer lands under that node as ordinary undoable elements.
@@ -14,15 +14,15 @@ Learn anything as a map you and ChatGPT draw together. Pin a question mark to a 
 
 ## Compatibility
 
-Use ChatGPT Codex with the Sol or Terra model. Luna does not support this WebMCP page yet.
+Open the live URL in an agent client that supports WebMCP: ChatGPT's in-app browser, or Google Chrome with WebMCP enabled. Not every client exposes page tools yet, so the canvas stays fully usable by hand on its own.
 
-The page does not accept a topic, pasted text, or PDF. Study Map has no backend of its own. Saved map copies remain in the browser unless the person shares or exports them; bounded WebMCP tool results go to the model provider when the agent invokes them.
+The landing field takes a short topic and puts it into the start message you paste into ChatGPT; the page itself does not read pasted text or files, and the agent reads any attached material in the conversation. Study Map has no backend of its own. Saved map copies remain in the browser unless the person shares or exports them; bounded WebMCP tool results go to the model provider when the agent invokes them.
 
 ## WebMCP surface
 
-Study Map publishes page-owned operations through [`document.modelContext.registerTool`](https://github.com/webmachinelearning/webmcp). The five study tools are `how_to_use`, `get_chart`, `get_selection`, `list_questions`, and `answer_question`. The inherited scene and local canvas lifecycle tools remain available for composing and saving maps.
+Study Map publishes page-owned operations through [`document.modelContext.registerTool`](https://github.com/webmachinelearning/webmcp). The six study tools are `how_to_use`, `choose_canvas`, `get_chart`, `get_selection`, `list_questions`, and `answer_question`. The inherited scene and local canvas lifecycle tools remain available for composing and saving maps.
 
-Native discovery and invocation are verified on this live origin in Codex Desktop 0.152.0, model Sol, through its built-in `iab` browser: 16 tools were observed (not a cap); a question was pinned; `list_questions` returned `open=1`; `answer_question` returned `applied=5`; and the prior human drag survived. No CDP, `evaluate`, injection, extension, or flag contributed. Receipt: `project/hackathon-hunter/reports/evidence/study-map-m2/native-drag-question-answer-f2c4cecd.json`.
+Native discovery and invocation are verified on this live origin in Codex Desktop 0.152.0, model Sol, through its built-in `iab` browser: 17 tools were observed (not a cap); the agent called `how_to_use` first and made no write before the person chose to continue or start a new canvas; a question was pinned by hand; `list_questions` returned the open question; `answer_question` attached a sourced branch under that node; and the prior human drag survived. No CDP, `evaluate`, injection, extension, or flag contributed.
 
 ## Run locally
 

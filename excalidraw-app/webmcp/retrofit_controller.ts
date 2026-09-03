@@ -99,7 +99,10 @@ const connectorBoundaryPoint = (
 
 type SceneApi = Pick<
   ExcalidrawImperativeAPI,
-  "getSceneElements" | "getAppState" | "updateScene"
+  | "getSceneElements"
+  | "getSceneElementsIncludingDeleted"
+  | "getAppState"
+  | "updateScene"
 >;
 
 type Geometry = Pick<
@@ -247,6 +250,10 @@ export const createRetrofitController = (
     api
       .getSceneElements()
       .filter((element) => !element.isDeleted) as readonly ExcalidrawElement[];
+  const allElements = () =>
+    typeof api.getSceneElementsIncludingDeleted === "function"
+      ? api.getSceneElementsIncludingDeleted()
+      : api.getSceneElements();
 
   const workingMap = () => {
     const map = new Map(liveElements().map((element) => [element.id, element]));
@@ -363,6 +370,7 @@ export const createRetrofitController = (
 
     if (writeMode === "immediate") {
       const current = liveElements();
+      const allCurrent = allElements();
       const latestById = new Map(
         current.map((element) => [element.id, element]),
       );
@@ -384,7 +392,8 @@ export const createRetrofitController = (
 
       const projected = Array.from(pendingById.values());
       const additions = projected.filter(({ id }) => !baseVersions[id]);
-      if (additions.some(({ id }) => latestById.has(id))) {
+      const allIds = new Set(allCurrent.map(({ id }) => id));
+      if (additions.some(({ id }) => allIds.has(id))) {
         return failure(
           "unsafe_retry",
           "A generated element id collided with the live drawing",
@@ -397,7 +406,9 @@ export const createRetrofitController = (
       );
       api.updateScene({
         elements: [
-          ...current.map((element) => projectedById.get(element.id) ?? element),
+          ...allCurrent.map(
+            (element) => projectedById.get(element.id) ?? element,
+          ),
           ...additions,
         ],
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -1156,6 +1167,7 @@ export const createRetrofitController = (
 
     const pending = snapshot.pending;
     const current = liveElements();
+    const allCurrent = allElements();
     const currentById = new Map(
       current.map((element) => [element.id, element]),
     );
@@ -1191,7 +1203,8 @@ export const createRetrofitController = (
     const additions = pending.elements.filter(
       ({ id }) => !pending.baseVersions[id],
     );
-    if (additions.some(({ id }) => currentById.has(id))) {
+    const allIds = new Set(allCurrent.map(({ id }) => id));
+    if (additions.some(({ id }) => allIds.has(id))) {
       snapshot = {
         ...snapshot,
         ledger: [
@@ -1208,7 +1221,7 @@ export const createRetrofitController = (
       return { ok: false as const, reason: "unsafe_retry" as const };
     }
 
-    const elements = current.map((element) => {
+    const elements = allCurrent.map((element) => {
       return pendingById.get(element.id) ?? element;
     });
     api.updateScene({

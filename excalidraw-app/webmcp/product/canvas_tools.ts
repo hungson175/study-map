@@ -24,7 +24,11 @@ type CanvasMetadata = { id?: string; name: string };
 
 type CanvasApi = Pick<
   ExcalidrawImperativeAPI,
-  "addFiles" | "getFiles" | "getSceneElements" | "updateScene"
+  | "addFiles"
+  | "getFiles"
+  | "getSceneElements"
+  | "getSceneElementsIncludingDeleted"
+  | "updateScene"
 >;
 
 type CanvasToolDependencies = {
@@ -47,6 +51,11 @@ const isToolFailure = (
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isCollapsedTombstone = (element: ExcalidrawElement) =>
+  element.isDeleted &&
+  isRecord(element.customData) &&
+  typeof element.customData.studyMapHiddenBy === "string";
 
 const hasOnlyKeys = (value: Record<string, unknown>, keys: string[]) =>
   Object.keys(value).every((key) => keys.includes(key));
@@ -108,6 +117,12 @@ export const createCanvasToolController = ({
     api
       .getSceneElements()
       .filter(({ isDeleted }) => !isDeleted) as readonly ExcalidrawElement[];
+  const storableElements = () =>
+    api
+      .getSceneElementsIncludingDeleted()
+      .filter(
+        (element) => !element.isDeleted || isCollapsedTombstone(element),
+      ) as readonly ExcalidrawElement[];
 
   const saveCurrent = async (
     requestedName: string | undefined,
@@ -123,7 +138,7 @@ export const createCanvasToolController = ({
       const saved = await store.save({
         ...(metadata.id ? { id: metadata.id } : {}),
         name,
-        elements: visibleElements() as unknown as Record<string, unknown>[],
+        elements: storableElements() as unknown as Record<string, unknown>[],
         files: api.getFiles() as unknown as Record<string, unknown>,
       });
       checkAbort(context.signal);

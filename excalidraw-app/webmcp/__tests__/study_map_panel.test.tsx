@@ -53,7 +53,10 @@ const makeApi = (initial: ExcalidrawElement[] = []) => {
   );
   return {
     api: {
-      getSceneElements: vi.fn(() => elements),
+      getSceneElements: vi.fn(() =>
+        elements.filter(({ isDeleted }) => !isDeleted),
+      ),
+      getSceneElementsIncludingDeleted: vi.fn(() => elements),
       getAppState: vi.fn(() => ({ selectedElementIds })),
       getFiles: vi.fn(() => ({})),
       updateScene,
@@ -83,6 +86,25 @@ const makeController = () => ({
   pinQuestionFromHuman: vi.fn(() => ({
     ok: true as const,
     questionId: "question-1",
+  })),
+  getBranchState: vi.fn(() => ({
+    ok: true as const,
+    collapsed: false,
+    hiddenDirectBranchCount: 2,
+  })),
+  collapseBranchFromHuman: vi.fn(() => ({
+    ok: true as const,
+    action: "collapsed" as const,
+    rootId: "hang-lang",
+    hiddenElementCount: 6,
+    hiddenDirectBranchCount: 2,
+  })),
+  expandBranchFromHuman: vi.fn(() => ({
+    ok: true as const,
+    action: "expanded" as const,
+    rootId: "hang-lang",
+    revivedElementCount: 6,
+    hiddenDirectBranchCount: 2,
   })),
   dispose: vi.fn(),
 });
@@ -675,7 +697,6 @@ describe("Study Map panel", () => {
       { ...node("deleted"), isDeleted: true },
       { ...node("line"), type: "line" },
       { ...node("question"), customData: { kind: "question" } },
-      { ...node("answer"), customData: { kind: "answer" } },
     ]) {
       const rejectedFixture = makeApi([rejected as ExcalidrawElement]);
       rejectedFixture.setSelected(rejected.id);
@@ -686,6 +707,13 @@ describe("Study Map panel", () => {
         ),
       ).toMatchObject({ ok: false, reason: "single_study_node_required" });
     }
+    const answerFixture = makeApi([
+      { ...node("answer"), customData: { kind: "answer" } },
+    ]);
+    answerFixture.setSelected("answer");
+    expect(
+      resolveQuestionTarget({ isTrusted: true }, answerFixture.api as never),
+    ).toMatchObject({ ok: true, nodeId: "answer" });
   });
 
   it("opens, cancels, and submits the question form through the trusted handler path", async () => {
@@ -824,5 +852,72 @@ describe("Study Map panel", () => {
     expect(
       await screen.findByText(/WebMCP (unavailable|count unavailable)/),
     ).toBeTruthy();
+  });
+
+  it("toggles selected outgoing branches only through a trusted pointer capture", async () => {
+    const fixture = makeApi([node("hang-lang")]);
+    fixture.setSelected("hang-lang");
+    const controller = makeController();
+    render(
+      <StudyMapPanel
+        api={fixture.api as never}
+        controller={controller as never}
+        initialWelcomeOpen={false}
+      />,
+    );
+    const toggle = screen.getByRole("button", {
+      name: "Collapse / expand selected branches",
+    });
+
+    act(() =>
+      invokeReactHandler(toggle, "onPointerDown", {
+        nativeEvent: { isTrusted: true },
+      }),
+    );
+    fixture.setSelected();
+    act(() =>
+      invokeReactHandler(toggle, "onClick", {
+        nativeEvent: { isTrusted: true },
+      }),
+    );
+    expect(controller.getBranchState).toHaveBeenCalledWith("hang-lang");
+    expect(controller.collapseBranchFromHuman).toHaveBeenCalledWith(
+      { isTrusted: true },
+      { rootId: "hang-lang" },
+    );
+    expect(controller.expandBranchFromHuman).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Collapsed 2 branches",
+    );
+
+    controller.getBranchState.mockReturnValue({
+      ok: true,
+      collapsed: true,
+      hiddenDirectBranchCount: 2,
+    });
+    fixture.setSelected("hang-lang");
+    act(() =>
+      invokeReactHandler(toggle, "onPointerDown", {
+        nativeEvent: { isTrusted: true },
+      }),
+    );
+    fixture.setSelected();
+    act(() =>
+      invokeReactHandler(toggle, "onClick", {
+        nativeEvent: { isTrusted: true },
+      }),
+    );
+    expect(controller.expandBranchFromHuman).toHaveBeenCalledWith(
+      { isTrusted: true },
+      { rootId: "hang-lang" },
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Expanded 2 branches");
+
+    controller.collapseBranchFromHuman.mockClear();
+    fireEvent.click(toggle);
+    expect(controller.collapseBranchFromHuman).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "A trusted click is required",
+    );
   });
 });

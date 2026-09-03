@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { encodeSharedScene } from "../product/share_scene";
+import { decodeSharedScene, encodeSharedScene } from "../product/share_scene";
 import { ProductShell } from "../product/ProductShell";
 
 const { exportToBlob } = vi.hoisted(() => ({
@@ -31,8 +31,21 @@ const rectangle = {
   isDeleted: false,
 };
 
+const collapsed = {
+  ...rectangle,
+  id: "collapsed-child",
+  isDeleted: true,
+  customData: { studyMapHiddenBy: "node-a" },
+};
+const deleted = { ...rectangle, id: "deleted", isDeleted: true };
+
 const makeApi = () => ({
   getSceneElements: vi.fn(() => [rectangle]),
+  getSceneElementsIncludingDeleted: vi.fn(() => [
+    rectangle,
+    collapsed,
+    deleted,
+  ]),
   getAppState: vi.fn(() => ({
     exportBackground: true,
     viewBackgroundColor: "#fff",
@@ -115,6 +128,16 @@ describe("Entry B product actions", () => {
     expect((shareInput as HTMLInputElement).value).toMatch(
       /#view=workspace&share=[A-Za-z0-9_-]+$/u,
     );
+    const sharedToken = new URL(
+      (shareInput as HTMLInputElement).value,
+    ).hash.match(/share=([^&]+)/u)?.[1];
+    expect(sharedToken).toBeTruthy();
+    const shared = decodeSharedScene(sharedToken!);
+    expect(shared).toMatchObject({ ok: true });
+    expect(
+      shared.ok &&
+        shared.scene.elements.map((element) => (element as { id: string }).id),
+    ).toEqual(["node-a", "collapsed-child"]);
 
     const token = encodeSharedScene({
       name: "Shared architecture",

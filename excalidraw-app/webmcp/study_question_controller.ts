@@ -7,6 +7,7 @@ import { newElementWith } from "@excalidraw/element";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element";
 import type {
+  ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
@@ -25,7 +26,10 @@ import type {
 
 type SceneApi = Pick<
   ExcalidrawImperativeAPI,
-  "getAppState" | "getSceneElements" | "updateScene"
+  | "getAppState"
+  | "getSceneElements"
+  | "getSceneElementsIncludingDeleted"
+  | "updateScene"
 >;
 
 export type IdFactory = () => string;
@@ -39,6 +43,11 @@ const MAX_SELECTED = 12;
 const MAX_QUESTIONS = 20;
 const MAX_OPEN_PER_NODE = 8;
 const MAX_LINE = 120;
+const MAX_ANSWER_SUMMARY = 180;
+const MAX_KEY_POINT = 100;
+const MAX_KEY_POINTS = 5;
+const MAX_SOURCE_TITLE = 80;
+const MAX_SOURCES = 2;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -73,6 +82,9 @@ const success = <T extends Record<string, unknown>>(value: T) =>
 const normalizeLine = (value: string) =>
   value.replace(/\s+/g, " ").trim().slice(0, MAX_LINE);
 
+const normalizeWhitespace = (value: string) =>
+  value.replace(/\s+/g, " ").trim();
+
 const emptyArgs = (args: unknown) =>
   isRecord(args) && Object.keys(args).length === 0;
 
@@ -103,9 +115,39 @@ const isStudyNode = (element: ExcalidrawElement) => {
     !element.isDeleted &&
     !element.locked &&
     STUDY_NODE_TYPES.has(element.type) &&
-    kind !== "question" &&
-    kind !== "answer"
+    kind !== "question"
   );
+};
+
+const collapsedData = (element: ExcalidrawElement) => {
+  const data = element.customData;
+  return isRecord(data)
+    ? {
+        collapsed: data.studyMapCollapsed === true,
+        hiddenDirectBranchCount:
+          typeof data.hiddenDirectBranchCount === "number"
+            ? data.hiddenDirectBranchCount
+            : 0,
+        hiddenBy:
+          typeof data.studyMapHiddenBy === "string"
+            ? data.studyMapHiddenBy
+            : null,
+      }
+    : { collapsed: false, hiddenDirectBranchCount: 0, hiddenBy: null };
+};
+
+const withCustomData = (
+  element: ExcalidrawElement,
+  patch: Record<string, unknown>,
+) => ({
+  ...(isRecord(element.customData) ? element.customData : {}),
+  ...patch,
+});
+
+const withoutCustomDataKeys = (element: ExcalidrawElement, keys: string[]) => {
+  const data = { ...(isRecord(element.customData) ? element.customData : {}) };
+  keys.forEach((key) => delete data[key]);
+  return data;
 };
 
 const textFor = (
@@ -202,6 +244,7 @@ export const createStudyQuestionController = (
   idFactory: IdFactory = randomId,
 ) => {
   const liveElements = () => api.getSceneElements();
+  const allElements = () => api.getSceneElementsIncludingDeleted();
 
   const liveStudyNodes = (elements: readonly ExcalidrawElement[]) =>
     elements.filter(isStudyNode).filter((node) => textFor(node.id, elements));
@@ -270,7 +313,7 @@ export const createStudyQuestionController = (
       },
       waiting: {
         next_step:
-          "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, write a short sourced answer as a connected shape under the node; do not answer in chat only.",
+          "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then create a small structured branch: one answer summary node plus its key points (and sources if given) as connected children. Do not paste full prose into a single node.",
         say_to_user: openTargetLabel
           ? `I found your existing map and an open question on “${openTargetLabel}”; I'll orient you to the map first, then we can research it and place the answer under that node.`
           : "I found an existing map with an open question; I'll orient you to what's here first, then we can research it and place the answer on the map.",
@@ -285,7 +328,7 @@ export const createStudyQuestionController = (
         "Read the learning material from the conversation, not from this page.",
         "Draw a small first study map.",
         "Pin a question mark on any node.",
-        "Create an answer shape connected to the asked node.",
+        "Answer fully in chat, then distill the answer into connected summary, key-point, and source nodes.",
         "Drag, edit, delete, or undo it; repeat to grow the mind map.",
       ],
       human_only: [
@@ -301,7 +344,7 @@ export const createStudyQuestionController = (
         "get_chart: read the bounded live outline",
         "get_selection: inspect selected study nodes",
         "list_questions: find open question marks",
-        "answer_question: create an answer shape connected to its questioned node",
+        "answer_question: distill the full chat answer into a compact branch connected to its questioned node",
       ],
     });
   };
@@ -328,11 +371,20 @@ export const createStudyQuestionController = (
       {
         nodeCount: nodes.length,
         edgeCount: edges.length,
-        nodes: nodes.slice(0, MAX_NODES).map((element) => ({
-          id: element.id,
-          label: textFor(element.id, elements),
-          text: textFor(element.id, elements),
-        })),
+        nodes: nodes.slice(0, MAX_NODES).map((element) => {
+          const collapsed = collapsedData(element);
+          return {
+            id: element.id,
+            label: textFor(element.id, elements),
+            text: textFor(element.id, elements),
+            ...(collapsed.collapsed
+              ? {
+                  collapsed: true,
+                  hiddenDirectBranchCount: collapsed.hiddenDirectBranchCount,
+                }
+              : {}),
+          };
+        }),
         edges: edges.slice(0, MAX_EDGES).map((element) => ({
           id: element.id,
           from: element.type === "arrow" ? element.startBinding!.elementId : "",
@@ -343,6 +395,9 @@ export const createStudyQuestionController = (
           .slice(0, MAX_SELECTED)
           .map(({ id }) => id),
         openQuestionCount: validOpenQuestions(elements).length,
+        collapsedNodeCount: nodes.filter(
+          (element) => collapsedData(element).collapsed,
+        ).length,
         truncated:
           nodes.length > MAX_NODES ||
           edges.length > MAX_EDGES ||
@@ -435,27 +490,100 @@ export const createStudyQuestionController = (
     checkAbort(context.signal);
     if (
       !isRecord(args) ||
-      !hasOnlyKeys(args, ["question_id", "answer"]) ||
+      !hasOnlyKeys(args, [
+        "question_id",
+        "answer_summary",
+        "key_points",
+        "sources",
+      ]) ||
       typeof args.question_id !== "string" ||
       !SAFE_ID_RE.test(args.question_id) ||
-      typeof args.answer !== "string"
+      typeof args.answer_summary !== "string" ||
+      !Array.isArray(args.key_points) ||
+      (typeof args.sources !== "undefined" && !Array.isArray(args.sources))
     ) {
-      return failure("invalid_args", "question_id and answer are required");
-    }
-    const answer = args.answer.trim();
-    if (answer.length < 1 || answer.length > 600) {
-      return failure("invalid_args", "answer must contain 1 to 600 characters");
+      return failure(
+        "invalid_args",
+        "question_id, answer_summary, and key_points are required",
+      );
     }
 
-    const elements = liveElements();
-    const marker = elements.find(
-      (element) => element.id === args.question_id && isQuestionMarker(element),
+    const answerSummary = normalizeWhitespace(args.answer_summary);
+    const keyPoints = args.key_points.map((point) =>
+      typeof point === "string" ? normalizeWhitespace(point) : null,
     );
     if (
-      !marker ||
-      marker.isDeleted ||
-      questionData(marker)?.status !== "open"
+      answerSummary.length < 1 ||
+      answerSummary.length > MAX_ANSWER_SUMMARY ||
+      keyPoints.length < 1 ||
+      keyPoints.length > MAX_KEY_POINTS ||
+      keyPoints.some(
+        (point) => !point || point.length < 1 || point.length > MAX_KEY_POINT,
+      ) ||
+      new Set(keyPoints.map((point) => point!.toLocaleLowerCase())).size !==
+        keyPoints.length
     ) {
+      return failure(
+        "invalid_args",
+        "Answer summary or key points are invalid",
+      );
+    }
+
+    const sourceValues = args.sources ?? [];
+    if (sourceValues.length > MAX_SOURCES) {
+      return failure("invalid_args", "At most two sources are allowed");
+    }
+    const sources: Array<{ title: string; url: string }> = [];
+    for (const source of sourceValues) {
+      if (
+        !isRecord(source) ||
+        !hasOnlyKeys(source, ["title", "url"]) ||
+        typeof source.title !== "string" ||
+        typeof source.url !== "string"
+      ) {
+        return failure(
+          "invalid_args",
+          "Each source needs a title and HTTPS URL",
+        );
+      }
+      const title = normalizeWhitespace(source.title);
+      let parsed: URL;
+      try {
+        parsed = new URL(source.url);
+      } catch {
+        return failure(
+          "invalid_args",
+          "Each source URL must be absolute HTTPS",
+        );
+      }
+      if (
+        title.length < 1 ||
+        title.length > MAX_SOURCE_TITLE ||
+        source.url.length > 2048 ||
+        parsed.protocol !== "https:" ||
+        parsed.username ||
+        parsed.password
+      ) {
+        return failure(
+          "invalid_args",
+          "Each source needs a valid title and HTTPS URL",
+        );
+      }
+      sources.push({ title, url: parsed.href });
+    }
+    if (
+      new Set(sources.map(({ url }) => url.toLocaleLowerCase())).size !==
+      sources.length
+    ) {
+      return failure("invalid_args", "Source URLs must be unique");
+    }
+
+    const live = liveElements();
+    const elements = allElements();
+    const marker = live.find(
+      (element) => element.id === args.question_id && isQuestionMarker(element),
+    );
+    if (!marker || questionData(marker)?.status !== "open") {
       return failure("not_found", "Open question does not exist");
     }
     if (marker.locked) {
@@ -465,11 +593,11 @@ export const createStudyQuestionController = (
     if (!data || !SAFE_ID_RE.test(data.nodeId)) {
       return failure("unsafe_retry", "Question metadata is malformed");
     }
-    const target = elements.find(({ id }) => id === data.nodeId);
-    if (!target || !isStudyNode(target) || !textFor(target.id, elements)) {
+    const target = live.find(({ id }) => id === data.nodeId);
+    if (!target || !isStudyNode(target) || !textFor(target.id, live)) {
       return failure("unsafe_retry", "Question target is unavailable");
     }
-    const question = questionTextFor(marker, elements);
+    const question = questionTextFor(marker, live);
     if (
       !question ||
       !marker.boundElements?.some(({ id }) => id === question.element.id)
@@ -477,86 +605,150 @@ export const createStudyQuestionController = (
       return failure("unsafe_retry", "Question text binding is malformed");
     }
 
+    const nodeInputs = [
+      { role: "answer_summary", label: answerSummary, parent: target.id },
+      ...keyPoints.map((label) => ({
+        role: "key_point",
+        label: label!,
+        parent: "summary",
+      })),
+      ...sources.map(({ title, url }) => ({
+        role: "source",
+        label: title,
+        parent: "summary",
+        url,
+      })),
+    ] as const;
     const unavailable = new Set(elements.map(({ id }) => id));
-    const answerNodeId = nextUniqueId(idFactory, unavailable);
-    const answerTextId = nextUniqueId(idFactory, unavailable);
-    const arrowId = nextUniqueId(idFactory, unavailable);
-    if (!answerNodeId || !answerTextId || !arrowId) {
+    const allocated = nodeInputs.map((input) => ({
+      ...input,
+      nodeId: nextUniqueId(idFactory, unavailable),
+      textId: nextUniqueId(idFactory, unavailable),
+      arrowId: nextUniqueId(idFactory, unavailable),
+    }));
+    if (
+      allocated.some(
+        ({ nodeId, textId, arrowId }) => !nodeId || !textId || !arrowId,
+      )
+    ) {
       return failure("unsafe_retry", "Could not allocate collision-free ids");
     }
     checkAbort(context.signal);
 
-    const width = 320;
-    const height = 84;
+    const summary = allocated[0] as typeof allocated[number] & {
+      nodeId: string;
+      textId: string;
+      arrowId: string;
+    };
+    const summaryWidth = 320;
+    const summaryHeight = 84;
+    const childWidth = 240;
+    const childHeight = 72;
     const x = target.x + 8;
-    let y: number | null = null;
+    const ignoredIds = new Set([
+      target.id,
+      marker.id,
+      question.element.id,
+      ...(target.boundElements?.map(({ id }) => id) ?? []),
+    ]);
+    let summaryY: number | null = null;
+    const layoutBoxes = (candidateY: number) => [
+      { x, y: candidateY, width: summaryWidth, height: summaryHeight },
+      ...allocated.slice(1).map((_, index) => ({
+        x: x + (index % 2) * (childWidth + 40),
+        y: candidateY + summaryHeight + 24 + Math.floor(index / 2) * 96,
+        width: childWidth,
+        height: childHeight,
+      })),
+    ];
     for (let step = 0; step <= 12; step++) {
-      const candidate = {
-        x,
-        y: target.y + target.height + 24 + step * 48,
-        width,
-        height,
-      };
+      const candidateY = target.y + target.height + 24 + step * 48;
+      const boxes = layoutBoxes(candidateY);
       if (
-        !elements.some(
+        !live.some(
           (element) =>
-            !element.isDeleted &&
-            element.id !== marker.id &&
-            element.id !== question.element.id &&
-            boxesOverlap(candidate, element),
+            !ignoredIds.has(element.id) &&
+            element.type !== "arrow" &&
+            boxes.some((box) => boxesOverlap(box, element)),
         )
       ) {
-        y = candidate.y;
+        summaryY = candidateY;
         break;
       }
     }
-    if (y === null) {
+    if (summaryY === null) {
       return failure("unsafe_retry", "No safe answer placement was available");
     }
 
-    const answerData = {
-      kind: "answer",
-      questionId: marker.id,
-      nodeId: target.id,
-      createdBy: "ask-the-chart",
-    };
     const skeletons: ExcalidrawElementSkeleton[] = [
       structuredClone(target) as ExcalidrawElementSkeleton,
-      {
-        id: answerNodeId,
-        type: "rectangle",
-        x,
-        y,
-        width,
-        height,
-        backgroundColor: "#fff3bf",
-        boundElements: [
-          { id: answerTextId, type: "text" },
-          { id: arrowId, type: "arrow" },
-        ],
-        customData: answerData,
-      },
-      {
-        id: answerTextId,
-        type: "text",
-        x: x + 12,
-        y: y + 12,
-        text: answer,
-        containerId: answerNodeId,
-        customData: answerData,
-      },
-      {
-        id: arrowId,
-        type: "arrow",
-        x: target.x + target.width / 2,
-        y: target.y + target.height,
-        width: x + width / 2 - (target.x + target.width / 2),
-        height: y - (target.y + target.height),
-        start: { id: target.id },
-        end: { id: answerNodeId },
-        customData: answerData,
-      },
     ];
+    allocated.forEach((item, index) => {
+      const nodeId = item.nodeId!;
+      const textId = item.textId!;
+      const arrowId = item.arrowId!;
+      const isSummary = index === 0;
+      const nodeX = isSummary ? x : x + ((index - 1) % 2) * (childWidth + 40);
+      const nodeY = isSummary
+        ? summaryY!
+        : summaryY! + summaryHeight + 24 + Math.floor((index - 1) / 2) * 96;
+      const width = isSummary ? summaryWidth : childWidth;
+      const height = isSummary ? summaryHeight : childHeight;
+      const parentId = isSummary ? target.id : summary.nodeId;
+      const customData = {
+        kind: "answer",
+        role: item.role,
+        questionId: marker.id,
+        nodeId: target.id,
+        parentId,
+        createdBy: "ask-the-chart",
+      };
+      skeletons.push(
+        {
+          id: nodeId,
+          type: "rectangle",
+          x: nodeX,
+          y: nodeY,
+          width,
+          height,
+          backgroundColor: item.role === "source" ? "#d0ebff" : "#fff3bf",
+          boundElements: [
+            { id: textId, type: "text" },
+            { id: arrowId, type: "arrow" },
+          ],
+          ...(item.role === "source" && "url" in item
+            ? { link: item.url }
+            : {}),
+          customData,
+        },
+        {
+          id: textId,
+          type: "text",
+          x: nodeX + 12,
+          y: nodeY + 12,
+          text: item.label,
+          containerId: nodeId,
+          customData,
+        },
+        {
+          id: arrowId,
+          type: "arrow",
+          x: isSummary ? target.x + target.width / 2 : x + summaryWidth / 2,
+          y: isSummary ? target.y + target.height : summaryY! + summaryHeight,
+          width:
+            nodeX +
+            width / 2 -
+            (isSummary ? target.x + target.width / 2 : x + summaryWidth / 2),
+          height:
+            nodeY -
+            (isSummary ? target.y + target.height : summaryY! + summaryHeight),
+          start: { id: parentId },
+          end: { id: nodeId },
+          customData,
+        },
+      );
+    });
+
     const converted = convertToExcalidrawElements(skeletons, {
       regenerateIds: false,
     });
@@ -564,39 +756,37 @@ export const createStudyQuestionController = (
       converted.map((element) => [element.id, element]),
     );
     const convertedTarget = convertedById.get(target.id);
-    const convertedAnswer = convertedById.get(answerNodeId);
-    const convertedText = convertedById.get(answerTextId);
-    const convertedArrow = convertedById.get(arrowId);
+    const created = allocated.flatMap(({ nodeId, textId, arrowId }) => [
+      convertedById.get(nodeId!),
+      convertedById.get(textId!),
+      convertedById.get(arrowId!),
+    ]);
+    const validBindings = allocated.every(({ nodeId, arrowId }, index) => {
+      const arrow = convertedById.get(arrowId!);
+      return (
+        arrow?.type === "arrow" &&
+        arrow.startBinding?.elementId ===
+          (index === 0 ? target.id : summary.nodeId) &&
+        arrow.endBinding?.elementId === nodeId
+      );
+    });
     if (
       !convertedTarget ||
-      !convertedAnswer ||
-      !convertedText ||
-      !convertedArrow ||
-      convertedArrow.type !== "arrow" ||
-      convertedArrow.startBinding?.elementId !== target.id ||
-      convertedArrow.endBinding?.elementId !== answerNodeId ||
-      !convertedTarget.boundElements?.some(({ id }) => id === arrowId) ||
-      !convertedAnswer.boundElements?.some(({ id }) => id === arrowId)
+      created.some((element) => !element) ||
+      !validBindings
     ) {
       return failure("unsafe_retry", "Answer bindings could not be verified");
     }
     checkAbort(context.signal);
 
-    const answeredData = {
-      ...marker.customData,
-      status: "answered",
-    };
     const answeredMarker = newElementWith(marker, {
-      customData: answeredData,
+      customData: withCustomData(marker, { status: "answered" }),
     });
-    const answeredTextValue = `✓ ${question.text}`;
+    const answeredQuestionTextValue = `✓ ${question.text}`;
     const answeredQuestionText = newElementWith(question.element, {
-      text: answeredTextValue,
-      originalText: answeredTextValue,
-      customData: {
-        ...question.element.customData,
-        status: "answered",
-      },
+      text: answeredQuestionTextValue,
+      originalText: answeredQuestionTextValue,
+      customData: withCustomData(question.element, { status: "answered" }),
     });
     const targetWithBinding = newElementWith(target, {
       boundElements: convertedTarget.boundElements,
@@ -615,20 +805,17 @@ export const createStudyQuestionController = (
     });
     checkAbort(context.signal);
     api.updateScene({
-      elements: [
-        updated,
-        convertedAnswer,
-        convertedText,
-        convertedArrow,
-      ].flat(),
+      elements: [...updated, ...(created as ExcalidrawElement[])],
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
     return success({
       questionId: marker.id,
-      nodeId: target.id,
-      answerNodeId,
+      anchorNodeId: target.id,
+      answerSummaryNodeId: summary.nodeId,
       status: "answered",
-      appliedElementCount: 5,
+      createdNodeCount: allocated.length,
+      createdConnectorCount: allocated.length,
+      appliedElementCount: allocated.length * 3,
     });
   };
 
@@ -668,13 +855,47 @@ export const createStudyQuestionController = (
     {
       name: "answer_question",
       description:
-        "Place a researched answer under an open question's live node and mark it answered.",
+        "Answer the person fully in chat, then distill the answer into a compact branch from the questioned node — do not paste full prose into the map.",
       inputSchema: toolSchema(
         {
           question_id: { type: "string", minLength: 1, maxLength: 64 },
-          answer: { type: "string", minLength: 1, maxLength: 600 },
+          answer_summary: {
+            type: "string",
+            minLength: 1,
+            maxLength: MAX_ANSWER_SUMMARY,
+          },
+          key_points: {
+            type: "array",
+            minItems: 1,
+            maxItems: MAX_KEY_POINTS,
+            uniqueItems: true,
+            items: { type: "string", minLength: 1, maxLength: MAX_KEY_POINT },
+          },
+          sources: {
+            type: "array",
+            maxItems: MAX_SOURCES,
+            uniqueItems: true,
+            items: {
+              type: "object",
+              properties: {
+                title: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: MAX_SOURCE_TITLE,
+                },
+                url: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 2048,
+                  pattern: "^https://",
+                },
+              },
+              required: ["title", "url"],
+              additionalProperties: false,
+            },
+          },
         },
-        ["question_id", "answer"],
+        ["question_id", "answer_summary", "key_points"],
       ),
       annotations: { readOnlyHint: false },
       execute: answerQuestion,
@@ -702,12 +923,13 @@ export const createStudyQuestionController = (
     if (text.length < 1 || text.length > 280) {
       return failure("invalid_args", "text must contain 1 to 280 characters");
     }
-    const elements = liveElements();
-    const target = elements.find(({ id }) => id === input.nodeId);
-    if (!target || !isStudyNode(target) || !textFor(target.id, elements)) {
+    const live = liveElements();
+    const elements = allElements();
+    const target = live.find(({ id }) => id === input.nodeId);
+    if (!target || !isStudyNode(target) || !textFor(target.id, live)) {
       return failure("not_found", "Study node does not exist or is locked");
     }
-    const openForNode = elements.filter((element) => {
+    const openForNode = live.filter((element) => {
       const data = questionData(element);
       return (
         !element.isDeleted &&
@@ -778,6 +1000,192 @@ export const createStudyQuestionController = (
     return deepFreeze({ ok: true as const, questionId: markerId });
   };
 
+  const getBranchState = (rootId: string) => {
+    if (typeof rootId !== "string" || !SAFE_ID_RE.test(rootId)) {
+      return failure("invalid_args", "rootId is required");
+    }
+    const root = liveElements().find(({ id }) => id === rootId);
+    if (!root || !isStudyNode(root)) {
+      return failure("not_found", "Study node does not exist or is locked");
+    }
+    const data = collapsedData(root);
+    return success({
+      rootId: root.id,
+      collapsed: data.collapsed,
+      hiddenDirectBranchCount: data.hiddenDirectBranchCount,
+    });
+  };
+
+  const collapseBranchFromHuman = (
+    gesture: HumanGesture,
+    input: { rootId: string },
+  ) => {
+    if (!gesture.isTrusted) {
+      return failure("invalid_args", "A trusted human gesture is required");
+    }
+    const state = getBranchState(input.rootId);
+    if (!state.ok) {
+      return state;
+    }
+    if (state.collapsed) {
+      return failure("unsafe_retry", "That branch is already collapsed");
+    }
+
+    const live = liveElements();
+    const elements = allElements();
+    const root = live.find(({ id }) => id === input.rootId)!;
+    const nodeIds = new Set(live.filter(isStudyNode).map(({ id }) => id));
+    const arrows = live.filter(
+      (element) =>
+        element.type === "arrow" &&
+        Boolean(element.startBinding) &&
+        Boolean(element.endBinding) &&
+        nodeIds.has(element.startBinding!.elementId) &&
+        nodeIds.has(element.endBinding!.elementId),
+    ) as unknown as readonly ExcalidrawArrowElement[];
+    const direct = arrows.filter(
+      (arrow) => arrow.startBinding?.elementId === root.id,
+    );
+    if (direct.length === 0) {
+      return failure(
+        "not_found",
+        "Selected node has no visible outgoing branch",
+      );
+    }
+
+    const hiddenIds = new Set<string>();
+    const visited = new Set<string>([root.id]);
+    const queue = [root.id];
+    while (queue.length) {
+      const currentId = queue.shift()!;
+      for (const arrow of arrows.filter(
+        (candidate) => candidate.startBinding?.elementId === currentId,
+      )) {
+        hiddenIds.add(arrow.id);
+        const childId = arrow.endBinding!.elementId;
+        if (childId === root.id || visited.has(childId)) {
+          continue;
+        }
+        const closesCycle = arrows.some(
+          (candidate) =>
+            candidate.startBinding?.elementId === childId &&
+            visited.has(candidate.endBinding?.elementId ?? ""),
+        );
+        if (closesCycle) {
+          continue;
+        }
+        const hasOtherVisibleParent = arrows.some(
+          (candidate) =>
+            candidate.id !== arrow.id &&
+            candidate.endBinding?.elementId === childId &&
+            candidate.startBinding?.elementId !== childId &&
+            !hiddenIds.has(candidate.id) &&
+            !visited.has(candidate.startBinding!.elementId),
+        );
+        if (hasOtherVisibleParent) {
+          continue;
+        }
+        visited.add(childId);
+        hiddenIds.add(childId);
+        const child = live.find(({ id }) => id === childId);
+        child?.boundElements
+          ?.filter(({ type }) => type === "text")
+          .forEach(({ id }) => hiddenIds.add(id));
+        for (const question of live.filter(
+          (element) =>
+            isQuestionMarker(element) &&
+            questionData(element)?.nodeId === childId,
+        )) {
+          hiddenIds.add(question.id);
+          question.boundElements?.forEach(({ id }) => hiddenIds.add(id));
+        }
+        if (!child || !collapsedData(child).collapsed) {
+          queue.push(childId);
+        }
+      }
+    }
+
+    const updated = elements.map((element) => {
+      if (element.id === root.id) {
+        return newElementWith(element, {
+          customData: withCustomData(element, {
+            studyMapCollapsed: true,
+            hiddenDirectBranchCount: direct.length,
+          }),
+        });
+      }
+      if (!hiddenIds.has(element.id)) {
+        return element;
+      }
+      return newElementWith(element, {
+        isDeleted: true,
+        customData: withCustomData(element, {
+          studyMapHiddenBy: root.id,
+        }),
+      });
+    });
+    api.updateScene({
+      elements: updated,
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    return success({
+      action: "collapsed",
+      rootId: root.id,
+      hiddenDirectBranchCount: direct.length,
+      hiddenElementCount: hiddenIds.size,
+    });
+  };
+
+  const expandBranchFromHuman = (
+    gesture: HumanGesture,
+    input: { rootId: string },
+  ) => {
+    if (!gesture.isTrusted) {
+      return failure("invalid_args", "A trusted human gesture is required");
+    }
+    const state = getBranchState(input.rootId);
+    if (!state.ok) {
+      return state;
+    }
+    if (!state.collapsed) {
+      return failure("unsafe_retry", "That branch is not collapsed");
+    }
+    const elements = allElements();
+    const restored = elements.filter(
+      (element) =>
+        element.isDeleted && collapsedData(element).hiddenBy === input.rootId,
+    );
+    const updated = elements.map((element) => {
+      if (element.id === input.rootId) {
+        return newElementWith(element, {
+          customData: withoutCustomDataKeys(element, [
+            "studyMapCollapsed",
+            "hiddenDirectBranchCount",
+          ]),
+        });
+      }
+      if (
+        !element.isDeleted ||
+        collapsedData(element).hiddenBy !== input.rootId
+      ) {
+        return element;
+      }
+      return newElementWith(element, {
+        isDeleted: false,
+        customData: withoutCustomDataKeys(element, ["studyMapHiddenBy"]),
+      });
+    });
+    api.updateScene({
+      elements: updated,
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    return success({
+      action: "expanded",
+      rootId: input.rootId,
+      hiddenDirectBranchCount: state.hiddenDirectBranchCount,
+      restoredElementCount: restored.length,
+    });
+  };
   return {
     listTools: (): PublicToolDescriptor[] => registry.listTools(),
     executeTool: (
@@ -786,6 +1194,9 @@ export const createStudyQuestionController = (
       context: ToolExecutionContext,
     ): Promise<ToolResult> => registry.execute(name, args, context),
     pinQuestionFromHuman,
+    getBranchState,
+    collapseBranchFromHuman,
+    expandBranchFromHuman,
     dispose: () => registry.dispose(),
   };
 };

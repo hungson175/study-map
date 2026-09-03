@@ -51,10 +51,19 @@ const readRoute = () => {
   return { view, share: params.get("share") };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const sceneElements = (api: ExcalidrawImperativeAPI) =>
-  api
-    .getSceneElements()
-    .filter(({ isDeleted }) => !isDeleted) as unknown as StoredElement[];
+  (typeof api.getSceneElementsIncludingDeleted === "function"
+    ? api.getSceneElementsIncludingDeleted()
+    : api.getSceneElements()
+  ).filter(
+    (element) =>
+      !element.isDeleted ||
+      (isRecord(element.customData) &&
+        typeof element.customData.studyMapHiddenBy === "string"),
+  ) as unknown as StoredElement[];
 
 const sceneFiles = (api: ExcalidrawImperativeAPI) =>
   api.getFiles() as unknown as StoredFiles;

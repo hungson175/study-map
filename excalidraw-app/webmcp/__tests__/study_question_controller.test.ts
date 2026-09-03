@@ -80,7 +80,8 @@ const makeApi = (initial: ExcalidrawElement[] = []) => {
 
   return {
     api: {
-      getSceneElements: () => elements,
+      getSceneElements: () => elements.filter(({ isDeleted }) => !isDeleted),
+      getSceneElementsIncludingDeleted: () => elements,
       getAppState: () => ({ selectedElementIds }),
       updateScene,
     },
@@ -133,6 +134,24 @@ describe("Study Map study-question controller", () => {
         ({ name }) => !/pin|add_question|delete|commit|undo/i.test(name),
       ),
     ).toBe(true);
+    expect(tools[4]).toMatchObject({
+      description:
+        "Answer the person fully in chat, then distill the answer into a compact branch from the questioned node — do not paste full prose into the map.",
+      inputSchema: {
+        required: ["question_id", "answer_summary", "key_points"],
+        additionalProperties: false,
+        properties: {
+          answer_summary: { type: "string", minLength: 1, maxLength: 180 },
+          key_points: {
+            type: "array",
+            minItems: 1,
+            maxItems: 5,
+            uniqueItems: true,
+          },
+          sources: { type: "array", maxItems: 2, uniqueItems: true },
+        },
+      },
+    });
   });
 
   it("returns a bounded single-English how_to_use guide grounded in three states", async () => {
@@ -200,7 +219,7 @@ describe("Study Map study-question controller", () => {
       say_to_user: string;
     };
     expect(waitingGuide.next_step).toBe(
-      "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, write a short sourced answer as a connected shape under the node; do not answer in chat only.",
+      "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then create a small structured branch: one answer summary node plus its key points (and sources if given) as connected children. Do not paste full prose into a single node.",
     );
     expect(waitingGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
     expect(waitingGuide.say_to_user).toMatch(
@@ -533,7 +552,14 @@ describe("Study Map study-question controller", () => {
       "answer_question",
       {
         question_id: "q-hang-lang",
-        answer: "Hạng Lang là con của Hoàng hậu Dương Vân Nga.",
+        answer_summary: "Hạng Lang là con của Hoàng hậu Dương Vân Nga.",
+        key_points: ["Con trai của Đinh Tiên Hoàng", "Mất năm 979"],
+        sources: [
+          {
+            title: "Đại Việt sử ký toàn thư",
+            url: "https://example.org/dai-viet-su-ky",
+          },
+        ],
       },
       { signal: signal() },
     );
@@ -541,10 +567,12 @@ describe("Study Map study-question controller", () => {
     expect(result).toMatchObject({
       ok: true,
       questionId: "q-hang-lang",
-      nodeId: "hang-lang",
-      answerNodeId: "answer-1",
+      anchorNodeId: "hang-lang",
+      answerSummaryNodeId: "answer-1",
       status: "answered",
-      appliedElementCount: 5,
+      createdNodeCount: 4,
+      createdConnectorCount: 4,
+      appliedElementCount: 12,
     });
     expect(fixture.updateScene).toHaveBeenCalledTimes(1);
     expect(fixture.updateScene.mock.calls[0][0].captureUpdate).toBe(
@@ -582,6 +610,314 @@ describe("Study Map study-question controller", () => {
             element.endBinding?.elementId === "answer-1",
         ),
     ).toBe(true);
+    const answerNodes = fixture
+      .getElements()
+      .filter(
+        (element) =>
+          element.type === "rectangle" &&
+          element.customData?.questionId === "q-hang-lang",
+      );
+    expect(answerNodes).toHaveLength(4);
+    expect(answerNodes.map((element) => element.customData?.role)).toEqual([
+      "answer_summary",
+      "key_point",
+      "key_point",
+      "source",
+    ]);
+    expect(
+      answerNodes.find((element) => element.customData?.role === "source"),
+    ).toMatchObject({ link: "https://example.org/dai-viet-su-ky" });
+    expect(
+      fixture
+        .getElements()
+        .filter(
+          (element) =>
+            element.type === "arrow" &&
+            element.customData?.questionId === "q-hang-lang",
+        ),
+    ).toHaveLength(4);
+    expect(
+      controller.pinQuestionFromHuman(
+        { isTrusted: true },
+        { nodeId: "answer-1", text: "What follows?" },
+      ),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("collapses and expands an exclusive branch while preserving shared nodes and manual deletes", async () => {
+    const graph = makeElements([
+      node("root", "Root", 0, 0),
+      node("child", "Child", 0, 180),
+      node("grand", "Grand", 0, 360),
+      node("other", "Other", 500, 0),
+      node("shared", "Shared", 500, 180),
+      node("shared-leaf", "Shared leaf", 500, 360),
+      {
+        id: "root-child",
+        type: "arrow",
+        x: 80,
+        y: 72,
+        width: 0,
+        height: 108,
+        start: { id: "root" },
+        end: { id: "child" },
+      },
+      {
+        id: "child-grand",
+        type: "arrow",
+        x: 80,
+        y: 252,
+        width: 0,
+        height: 108,
+        start: { id: "child" },
+        end: { id: "grand" },
+      },
+      {
+        id: "root-shared",
+        type: "arrow",
+        x: 180,
+        y: 36,
+        width: 320,
+        height: 144,
+        start: { id: "root" },
+        end: { id: "shared" },
+      },
+      {
+        id: "other-shared",
+        type: "arrow",
+        x: 580,
+        y: 72,
+        width: 0,
+        height: 108,
+        start: { id: "other" },
+        end: { id: "shared" },
+      },
+      {
+        id: "shared-leaf-edge",
+        type: "arrow",
+        x: 580,
+        y: 252,
+        width: 0,
+        height: 108,
+        start: { id: "shared" },
+        end: { id: "shared-leaf" },
+      },
+    ]);
+    const manual = {
+      ...makeElements([node("manual-delete", "Gone", 900, 0)])[0],
+      isDeleted: true,
+    } as ExcalidrawElement;
+    const fixture = makeApi([
+      ...graph,
+      ...questionElements(
+        "child-question",
+        "child-question-text",
+        "child",
+        "Why?",
+      ),
+      manual,
+    ]);
+    const controller = createStudyQuestionController(
+      fixture.api as never,
+      makeIds("collapse"),
+    ) as ReturnType<typeof createStudyQuestionController> & {
+      collapseBranchFromHuman: (
+        gesture: { isTrusted: boolean },
+        input: { rootId: string },
+      ) => Record<string, unknown>;
+      expandBranchFromHuman: (
+        gesture: { isTrusted: boolean },
+        input: { rootId: string },
+      ) => Record<string, unknown>;
+    };
+
+    expect(
+      controller.collapseBranchFromHuman(
+        { isTrusted: false },
+        { rootId: "root" },
+      ),
+    ).toMatchObject({ ok: false });
+    expect(fixture.updateScene).not.toHaveBeenCalled();
+
+    const collapsed = controller.collapseBranchFromHuman(
+      { isTrusted: true },
+      { rootId: "root" },
+    );
+    expect(collapsed).toMatchObject({
+      ok: true,
+      action: "collapsed",
+      rootId: "root",
+      hiddenDirectBranchCount: 2,
+    });
+    expect(Object.isFrozen(collapsed)).toBe(true);
+    expect(fixture.updateScene).toHaveBeenCalledTimes(1);
+    expect(fixture.updateScene.mock.calls[0][0].captureUpdate).toBe(
+      CaptureUpdateAction.IMMEDIATELY,
+    );
+    const byId = new Map(
+      fixture.getElements().map((element) => [element.id, element]),
+    );
+    expect(byId.get("root")).toMatchObject({
+      isDeleted: false,
+      customData: {
+        studyMapCollapsed: true,
+        hiddenDirectBranchCount: 2,
+      },
+    });
+    for (const id of [
+      "root-child",
+      "child",
+      "child-grand",
+      "grand",
+      "child-question",
+      "child-question-text",
+      "root-shared",
+    ]) {
+      expect(byId.get(id)).toMatchObject({
+        isDeleted: true,
+        customData: { studyMapHiddenBy: "root" },
+      });
+    }
+    for (const id of [
+      "other",
+      "other-shared",
+      "shared",
+      "shared-leaf-edge",
+      "shared-leaf",
+    ]) {
+      expect(byId.get(id)?.isDeleted).toBe(false);
+    }
+
+    await expect(
+      controller.executeTool("get_chart", {}, { signal: signal() }),
+    ).resolves.toMatchObject({
+      ok: true,
+      collapsedNodeCount: 1,
+      nodes: expect.arrayContaining([
+        expect.objectContaining({
+          id: "root",
+          collapsed: true,
+          hiddenDirectBranchCount: 2,
+        }),
+      ]),
+    });
+
+    const expanded = controller.expandBranchFromHuman(
+      { isTrusted: true },
+      { rootId: "root" },
+    );
+    expect(expanded).toMatchObject({
+      ok: true,
+      action: "expanded",
+      rootId: "root",
+      hiddenDirectBranchCount: 2,
+    });
+    expect(Object.isFrozen(expanded)).toBe(true);
+    expect(fixture.updateScene).toHaveBeenCalledTimes(2);
+    const expandedById = new Map(
+      fixture.getElements().map((element) => [element.id, element]),
+    );
+    expect(expandedById.get("root")?.customData).not.toMatchObject({
+      studyMapCollapsed: true,
+    });
+    expect(expandedById.get("child")?.isDeleted).toBe(false);
+    expect(expandedById.get("child-question")?.isDeleted).toBe(false);
+    expect(expandedById.get("manual-delete")?.isDeleted).toBe(true);
+    expect(expandedById.get("manual-delete")?.customData).not.toMatchObject({
+      studyMapHiddenBy: expect.anything(),
+    });
+  });
+
+  it("preserves nested collapse and terminates a cycle without hiding its root", () => {
+    const fixture = makeApi(
+      makeElements([
+        node("root", "Root", 0, 0),
+        node("child", "Child", 0, 180),
+        node("grand", "Grand", 0, 360),
+        {
+          id: "root-child",
+          type: "arrow",
+          x: 80,
+          y: 72,
+          width: 0,
+          height: 108,
+          start: { id: "root" },
+          end: { id: "child" },
+        },
+        {
+          id: "child-grand",
+          type: "arrow",
+          x: 80,
+          y: 252,
+          width: 0,
+          height: 108,
+          start: { id: "child" },
+          end: { id: "grand" },
+        },
+        {
+          id: "grand-root",
+          type: "arrow",
+          x: 180,
+          y: 360,
+          width: 180,
+          height: -360,
+          start: { id: "grand" },
+          end: { id: "root" },
+        },
+      ]),
+    );
+    const controller = createStudyQuestionController(
+      fixture.api as never,
+      makeIds(),
+    ) as ReturnType<typeof createStudyQuestionController> & {
+      collapseBranchFromHuman: (
+        gesture: { isTrusted: boolean },
+        input: { rootId: string },
+      ) => Record<string, unknown>;
+      expandBranchFromHuman: (
+        gesture: { isTrusted: boolean },
+        input: { rootId: string },
+      ) => Record<string, unknown>;
+    };
+
+    expect(
+      controller.collapseBranchFromHuman(
+        { isTrusted: true },
+        { rootId: "child" },
+      ),
+    ).toMatchObject({ ok: true, action: "collapsed" });
+    expect(
+      controller.collapseBranchFromHuman(
+        { isTrusted: true },
+        { rootId: "root" },
+      ),
+    ).toMatchObject({ ok: true, action: "collapsed" });
+    expect(
+      controller.expandBranchFromHuman({ isTrusted: true }, { rootId: "root" }),
+    ).toMatchObject({ ok: true, action: "expanded" });
+
+    let byId = new Map(
+      fixture.getElements().map((element) => [element.id, element]),
+    );
+    expect(byId.get("root")?.isDeleted).toBe(false);
+    expect(byId.get("child")?.isDeleted).toBe(false);
+    expect(byId.get("grand")?.isDeleted).toBe(true);
+    expect(byId.get("grand")?.customData).toMatchObject({
+      studyMapHiddenBy: "child",
+    });
+
+    expect(
+      controller.expandBranchFromHuman(
+        { isTrusted: true },
+        { rootId: "child" },
+      ),
+    ).toMatchObject({ ok: true, action: "expanded" });
+    byId = new Map(
+      fixture.getElements().map((element) => [element.id, element]),
+    );
+    expect(byId.get("root")?.isDeleted).toBe(false);
+    expect(byId.get("child")?.isDeleted).toBe(false);
+    expect(byId.get("grand")?.isDeleted).toBe(false);
   });
 
   it("uses moved live geometry, avoids overlap deterministically, and refuses a repeat", async () => {
@@ -606,7 +942,11 @@ describe("Study Map study-question controller", () => {
 
     await controller.executeTool(
       "answer_question",
-      { question_id: "q", answer: "Because." },
+      {
+        question_id: "q",
+        answer_summary: "Because.",
+        key_points: ["Reason"],
+      },
       { signal: signal() },
     );
     const answer = fixture.getElements().find(({ id }) => id === "placed-1")!;
@@ -616,7 +956,11 @@ describe("Study Map study-question controller", () => {
     await expect(
       controller.executeTool(
         "answer_question",
-        { question_id: "q", answer: "Again." },
+        {
+          question_id: "q",
+          answer_summary: "Again.",
+          key_points: ["Repeat"],
+        },
         { signal: signal() },
       ),
     ).resolves.toMatchObject({ ok: false, reason: "not_found" });
@@ -663,7 +1007,11 @@ describe("Study Map study-question controller", () => {
     await expect(
       controller.executeTool(
         "answer_question",
-        { question_id: "missing", answer: "No" },
+        {
+          question_id: "missing",
+          answer_summary: "No",
+          key_points: ["Missing"],
+        },
         { signal: signal() },
       ),
     ).resolves.toMatchObject({ ok: false, reason: "not_found" });
@@ -677,7 +1025,11 @@ describe("Study Map study-question controller", () => {
       await expect(
         controller.executeTool(
           "answer_question",
-          { question_id, answer: "No" },
+          {
+            question_id,
+            answer_summary: "No",
+            key_points: ["Unsafe"],
+          },
           { signal: signal() },
         ),
       ).resolves.toMatchObject({ ok: false, reason: "unsafe_retry" });
@@ -698,9 +1050,39 @@ describe("Study Map study-question controller", () => {
     );
     for (const args of [
       {},
-      { question_id: "q", answer: "" },
-      { question_id: "q", answer: "A".repeat(601) },
-      { question_id: "q", answer: "A", extra: true },
+      { question_id: "q", answer: "legacy" },
+      { question_id: "q", answer_summary: "", key_points: ["Point"] },
+      {
+        question_id: "q",
+        answer_summary: "A".repeat(181),
+        key_points: ["Point"],
+      },
+      {
+        question_id: "q",
+        answer_summary: "A",
+        key_points: ["Point"],
+        extra: true,
+      },
+      {
+        question_id: "q",
+        answer_summary: "A",
+        key_points: ["Same point", "  same   POINT  "],
+      },
+      {
+        question_id: "q",
+        answer_summary: "A",
+        key_points: ["Point"],
+        sources: [{ title: "Source", url: "http://example.org/not-https" }],
+      },
+      {
+        question_id: "q",
+        answer_summary: "A",
+        key_points: ["Point"],
+        sources: [
+          { title: "One", url: "https://example.org/source" },
+          { title: "Two", url: "https://example.org/source" },
+        ],
+      },
     ]) {
       await expect(
         controller.executeTool("answer_question", args, { signal: signal() }),
@@ -712,7 +1094,11 @@ describe("Study Map study-question controller", () => {
     await expect(
       controller.executeTool(
         "answer_question",
-        { question_id: "q", answer: "A" },
+        {
+          question_id: "q",
+          answer_summary: "A",
+          key_points: ["Point"],
+        },
         { signal: alreadyAborted.signal },
       ),
     ).rejects.toMatchObject({ name: "AbortError" });
@@ -734,7 +1120,11 @@ describe("Study Map study-question controller", () => {
     await expect(
       lateController.executeTool(
         "answer_question",
-        { question_id: "q", answer: "A" },
+        {
+          question_id: "q",
+          answer_summary: "A",
+          key_points: ["Point"],
+        },
         { signal: lateAbort.signal },
       ),
     ).rejects.toMatchObject({ name: "AbortError" });
@@ -769,7 +1159,11 @@ describe("Study Map study-question controller", () => {
     );
     await controller.executeTool(
       "answer_question",
-      { question_id: "flow-1", answer: "This." },
+      {
+        question_id: "flow-1",
+        answer_summary: "This.",
+        key_points: ["Point"],
+      },
       { signal: signal() },
     );
     const questions = await controller.executeTool(
@@ -790,7 +1184,7 @@ describe("Study Map study-question controller", () => {
     expect(before).toMatchObject({ selected: [] });
     expect(selected).toMatchObject({ selected: [{ id: "node" }] });
     expect(questions).toMatchObject({ openQuestionCount: 0 });
-    expect(chart).toMatchObject({ openQuestionCount: 0, nodeCount: 1 });
+    expect(chart).toMatchObject({ openQuestionCount: 0, nodeCount: 3 });
     for (const result of [before, selected, questions, chart]) {
       expect(Object.isFrozen(result)).toBe(true);
       expect(JSON.stringify(result).length).toBeLessThan(1536);

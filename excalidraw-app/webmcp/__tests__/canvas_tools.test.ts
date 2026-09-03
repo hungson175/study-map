@@ -16,6 +16,12 @@ const rectangle = {
 };
 
 const deleted = { ...rectangle, id: "deleted", isDeleted: true };
+const collapsed = {
+  ...rectangle,
+  id: "collapsed-child",
+  isDeleted: true,
+  customData: { studyMapHiddenBy: "node-a" },
+};
 
 const makeHarness = () => {
   let metadata: { id?: string; name: string } = {
@@ -23,7 +29,12 @@ const makeHarness = () => {
     name: "Current canvas",
   };
   const api = {
-    getSceneElements: vi.fn(() => [rectangle, deleted]),
+    getSceneElements: vi.fn(() => [rectangle]),
+    getSceneElementsIncludingDeleted: vi.fn(() => [
+      rectangle,
+      collapsed,
+      deleted,
+    ]),
     getFiles: vi.fn(() => ({ "file-1": { id: "file-1" } })),
     updateScene: vi.fn(),
     addFiles: vi.fn(),
@@ -132,7 +143,7 @@ describe("canvas lifecycle WebMCP tools", () => {
     expect(api.updateScene).not.toHaveBeenCalled();
   });
 
-  it("saves the current visible scene under an optional new name", async () => {
+  it("saves the live scene plus collapsed branches but excludes manual tombstones", async () => {
     const { execute, setMetadata, setStatus, store } = makeHarness();
 
     await expect(
@@ -147,7 +158,7 @@ describe("canvas lifecycle WebMCP tools", () => {
     expect(store.save).toHaveBeenCalledWith({
       id: "canvas-current",
       name: "Architecture v2",
-      elements: [rectangle],
+      elements: [rectangle, collapsed],
       files: { "file-1": { id: "file-1" } },
     });
     expect(setMetadata).toHaveBeenCalledWith({

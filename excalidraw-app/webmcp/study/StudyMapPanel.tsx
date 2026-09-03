@@ -51,7 +51,7 @@ const isStudyNode = (element: ExcalidrawElement) => {
     return false;
   }
   const kind = isRecord(element.customData) ? element.customData.kind : null;
-  return kind !== "question" && kind !== "answer";
+  return kind !== "question";
 };
 
 const labelFor = (
@@ -142,6 +142,10 @@ export const StudyMapPanel = ({
   const ownsController = !suppliedController;
   const rootRef = useRef<HTMLDivElement>(null);
   const askPointerTargetRef = useRef<Extract<
+    QuestionTarget,
+    { ok: true }
+  > | null>(null);
+  const branchPointerTargetRef = useRef<Extract<
     QuestionTarget,
     { ok: true }
   > | null>(null);
@@ -294,6 +298,61 @@ export const StudyMapPanel = ({
     setStatus(`Question for ${target.label}`);
   };
 
+  const rememberBranchTarget = (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => {
+    if (!event.nativeEvent.isTrusted) {
+      branchPointerTargetRef.current = null;
+      return;
+    }
+    const target = resolveQuestionTarget({ isTrusted: true }, api);
+    branchPointerTargetRef.current = target.ok ? target : null;
+  };
+
+  const toggleBranches = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!event.nativeEvent.isTrusted) {
+      branchPointerTargetRef.current = null;
+      setStatus("A trusted click is required");
+      return;
+    }
+    const remembered = branchPointerTargetRef.current;
+    branchPointerTargetRef.current = null;
+    if (!remembered) {
+      setStatus("Select one unlocked study node");
+      return;
+    }
+    const live = api
+      .getSceneElements()
+      .find(({ id }) => id === remembered.nodeId);
+    if (!live || !isStudyNode(live)) {
+      setStatus("Select one unlocked study node");
+      return;
+    }
+    const branch = controller.getBranchState(live.id);
+    if (!branch.ok) {
+      setStatus(branch.message);
+      return;
+    }
+    const result = branch.collapsed
+      ? controller.expandBranchFromHuman(
+          { isTrusted: true },
+          { rootId: live.id },
+        )
+      : controller.collapseBranchFromHuman(
+          { isTrusted: true },
+          { rootId: live.id },
+        );
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+    setStatus(
+      `${result.action === "collapsed" ? "Collapsed" : "Expanded"} ${
+        result.hiddenDirectBranchCount
+      } branches`,
+    );
+  };
+
   const submitQuestion = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!question) {
@@ -345,6 +404,13 @@ export const StudyMapPanel = ({
           onClick={openQuestion}
         >
           ? Ask about selected node
+        </button>
+        <button
+          type="button"
+          onPointerDown={rememberBranchTarget}
+          onClick={toggleBranches}
+        >
+          Collapse / expand selected branches
         </button>
         {question ? (
           <form onSubmit={submitQuestion} aria-label="Ask about node">

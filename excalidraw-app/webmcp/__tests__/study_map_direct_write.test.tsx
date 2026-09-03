@@ -19,6 +19,7 @@ type TestElement = {
   versionNonce: number;
   isDeleted: boolean;
   locked: boolean;
+  customData?: Record<string, unknown> | null;
   boundElements?: Array<{ id: string; type: string }> | null;
   startBinding?: { elementId: string } | null;
   endBinding?: { elementId: string } | null;
@@ -65,7 +66,8 @@ const mutableApi = (initial: TestElement[] = []) => {
   );
   return {
     api: {
-      getSceneElements: () => elements,
+      getSceneElements: () => elements.filter(({ isDeleted }) => !isDeleted),
+      getSceneElementsIncludingDeleted: () => elements,
       getAppState: () => appState,
       updateScene,
       onChange: vi.fn(() => () => {}),
@@ -101,7 +103,11 @@ describe("Study Map direct-write scene tools", () => {
     expect(stagedApi.updateScene).not.toHaveBeenCalled();
     expect(staged.getSnapshot().pending).not.toBeNull();
 
-    const immediateApi = mutableApi();
+    const hidden = element("hidden-child", 900, 900, {
+      isDeleted: true,
+      customData: { studyMapHiddenBy: "root" },
+    });
+    const immediateApi = mutableApi([hidden]);
     const immediate = createRetrofitController(immediateApi.api as never, {
       writeMode: "immediate",
     });
@@ -120,6 +126,7 @@ describe("Study Map direct-write scene tools", () => {
     expect(immediateApi.updateScene.mock.calls[0][0].captureUpdate).toBe(
       CaptureUpdateAction.IMMEDIATELY,
     );
+    expect(immediateApi.getElements()).toContainEqual(hidden);
     expect(immediate.getSnapshot().pending).toBeNull();
     expect(immediate.getSnapshot().ledger).toMatchObject([
       { tool: "create_shapes", outcome: "applied" },

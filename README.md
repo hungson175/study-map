@@ -14,13 +14,13 @@ Learn anything as a map you and ChatGPT draw together. Pin a question mark to a 
 
 ## Compatibility
 
-Open the live URL in an agent client that supports WebMCP: ChatGPT's in-app browser, or Google Chrome with WebMCP enabled. Not every client exposes page tools yet, so the canvas stays fully usable by hand on its own.
+Open the live URL in an agent client that supports WebMCP: Codex Desktop's built-in browser, or Google Chrome 154 with no flags. Not every client exposes page tools yet, so the canvas stays fully usable by hand on its own.
 
 The landing field takes a short topic and puts it into the start message you paste into ChatGPT; the page itself does not read pasted text or files, and the agent reads any attached material in the conversation. Study Map has no backend of its own. Saved map copies remain in the browser unless the person shares or exports them; bounded WebMCP tool results go to the model provider when the agent invokes them.
 
 ## WebMCP surface
 
-Study Map publishes page-owned operations through [`document.modelContext.registerTool`](https://github.com/webmachinelearning/webmcp). The six study tools are `how_to_use`, `choose_canvas`, `get_chart`, `get_selection`, `list_questions`, and `answer_question`. The inherited scene and local canvas lifecycle tools remain available for composing and saving maps.
+Study Map publishes page-owned operations through [`document.modelContext.registerTool`](https://github.com/webmachinelearning/webmcp). The six study tools are `how_to_use`, `choose_canvas`, `get_chart`, `get_selection`, `list_questions`, and `answer_question`. Together with the scene and canvas-lifecycle tools (`select_shapes`, `align_shapes`, `equalize_size`, `distribute_shapes`, `connect_shapes`, `create_shapes`, `get_canvas_state`, `list_saved_canvases`, `save_canvas`, `create_canvas`, `open_saved_canvas`), the page exposes 17 tools in total.
 
 Native discovery and invocation are verified on this live origin in Codex Desktop 0.152.0, model Sol, through its built-in `iab` browser: 17 tools were observed (not a cap); the agent called `how_to_use` first and made no write before the person chose to continue or start a new canvas; a question was pinned by hand; `list_questions` returned the open question; `answer_question` attached a sourced branch under that node; and the prior human drag survived. No CDP, `evaluate`, injection, extension, or flag contributed.
 

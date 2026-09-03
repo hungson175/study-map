@@ -4,7 +4,7 @@ Study Map is a focused learning product retrofitted onto the existing MIT-licens
 
 **[Open Study Map](https://hungson175.github.io/study-map/) · [Inspect the public source](https://github.com/hungson175/study-map)**
 
-The inherited retrofit history below describes the seed on which Study Map is built. Study Map adds a study-first welcome, a human-pinned question marker, bounded chart reads, and an immediate undoable answer path. Native invocation claims remain pending until this exact origin passes its own gate.
+The inherited retrofit history below describes the seed on which Study Map is built. Study Map adds a study-first welcome, a human-pinned question marker, bounded chart reads, and an immediate undoable answer path. At the time of that snapshot, native invocation claims remained pending until this exact origin passed its own gate; the origin has since passed (see README "WebMCP surface" for the verified Codex Desktop 0.152.0 gate).
 
 ## Measured cost
 
@@ -56,10 +56,10 @@ Agent changes render as amber `UNCOMMITTED` ghosts while the saved scene stays u
 
 ## Public proof
 
-In stock Chrome 154 with no WebMCP flags or injection, the live page exposed exactly four tools. One gate composed six rectangles into six bound arrows while the scene stayed at seven elements until a trusted click changed it to thirteen. A separate independent gate used four rectangles and one diamond, refused a duplicate, and changed five elements to nine. Both fresh second profiles were empty and both runs recorded zero console, page, or request errors.
+In stock Chrome 154 with no WebMCP flags or injection, the live page at that snapshot exposed exactly four tools. One gate composed six rectangles into six bound arrows while the scene stayed at seven elements until a trusted click changed it to thirteen. A separate independent gate used four rectangles and one diamond, refused a duplicate, and changed five elements to nine. Both fresh second profiles were empty and both runs recorded zero console, page, or request errors.
 
 - `browser_api=PASS`
-- `native_agent_invocation=UNPROVEN`
+- `native_agent_invocation=UNPROVEN` (at that snapshot; superseded by the Codex Desktop 0.152.0 native gate recorded in README "WebMCP surface")
 
 ## Why this belongs in the page, not an extension
 

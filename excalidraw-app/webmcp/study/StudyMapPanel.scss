@@ -75,6 +75,31 @@
   font-size: 1rem;
 }
 
+.study-map__topic-field {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  color: #27223b;
+  font-weight: 750;
+
+  input {
+    width: 100%;
+    min-height: 2.75rem;
+    box-sizing: border-box;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid #d8d3ec;
+    border-radius: 0.75rem;
+    background: white;
+    color: #191725;
+    font: inherit;
+  }
+
+  input:focus {
+    border-color: #6965db;
+    outline: 0.18rem solid rgb(105 101 219 / 18%);
+  }
+}
+
 .study-map__start-prompt {
   max-width: 40rem;
   margin: 0 0 1rem;

@@ -3,11 +3,16 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  buildStudyMapStartPrompt,
+  DEFAULT_STUDY_TOPIC,
+} from "../study/study_map_prompt";
+
 const root = path.resolve(import.meta.dirname, "../../..");
 const read = (relative: string) =>
   fs.readFileSync(path.join(root, relative), "utf8");
 const VERSION_B_PROMPT =
-  "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help me study using study-map";
+  "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help guide me to learn about WebMCP as a software developer";
 
 describe("Study Map public identity", () => {
   it("mounts the study registration before the two retained seed surfaces", () => {
@@ -120,6 +125,11 @@ describe("Study Map public identity", () => {
       ? fs.readFileSync(promptPath, "utf8")
       : "";
     expect(prompt).toContain(VERSION_B_PROMPT);
+    expect(DEFAULT_STUDY_TOPIC).toBe("WebMCP as a software developer");
+    expect(buildStudyMapStartPrompt("  Vietnamese   history  ")).toBe(
+      "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help guide me to learn about Vietnamese history",
+    );
+    expect(buildStudyMapStartPrompt("   ")).toBe(VERSION_B_PROMPT);
     expect(panel).toContain('from "./study_map_prompt"');
     expect(shell).toContain('from "../study/study_map_prompt"');
     expect(panel).not.toContain(VERSION_B_PROMPT);

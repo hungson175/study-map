@@ -8,6 +8,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProductShell } from "../product/ProductShell";
+import {
+  DEFAULT_STUDY_TOPIC,
+  setStudyMapTopic,
+} from "../study/study_map_prompt";
 
 type RegisteredDefinition = {
   name: string;
@@ -42,7 +46,10 @@ const makeStore = () => ({
 });
 
 describe("Entry B product shell", () => {
-  beforeEach(() => window.history.replaceState({}, "", "/"));
+  beforeEach(() => {
+    window.history.replaceState({}, "", "/");
+    setStudyMapTopic(DEFAULT_STUDY_TOPIC);
+  });
 
   afterEach(() => {
     Object.defineProperty(document, "modelContext", {
@@ -93,7 +100,7 @@ describe("Entry B product shell", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Saved");
   });
 
-  it("copies the complete LinkedIn demo prompt from the workspace toolbar", async () => {
+  it("copies the current landing topic from the workspace toolbar", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
@@ -102,6 +109,7 @@ describe("Entry B product shell", () => {
     render(
       <ProductShell api={makeApi() as never} store={makeStore() as never} />,
     );
+    act(() => setStudyMapTopic("Data structures"));
 
     fireEvent.click(
       screen.getByRole("button", { name: "Copy Study Map prompt" }),
@@ -109,7 +117,7 @@ describe("Entry B product shell", () => {
 
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(
-        "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help me study using study-map",
+        "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help guide me to learn about Data structures",
       ),
     );
     expect(screen.getByRole("button", { name: "Prompt copied" })).toBeTruthy();

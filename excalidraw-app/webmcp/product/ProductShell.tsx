@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -20,7 +21,11 @@ import {
   type WebMCPToolActivity,
 } from "../tool_activity";
 import { createWebMCPRegistration } from "../webmcp_adapter";
-import { STUDY_MAP_START_PROMPT } from "../study/study_map_prompt";
+import {
+  buildStudyMapStartPrompt,
+  getStudyMapTopic,
+  subscribeToStudyMapTopic,
+} from "../study/study_map_prompt";
 
 import { createCanvasToolController } from "./canvas_tools";
 import {
@@ -99,6 +104,11 @@ export const ProductShell = ({
   const [status, setStatus] = useState("Ready");
   const [shareUrl, setShareUrl] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
+  const studyTopic = useSyncExternalStore(
+    subscribeToStudyMapTopic,
+    getStudyMapTopic,
+    getStudyMapTopic,
+  );
   const importedShare = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const metadataRef = useRef<{ id?: string; name: string }>({ name });
@@ -367,7 +377,7 @@ export const ProductShell = ({
       return;
     }
     try {
-      await clipboard.writeText(STUDY_MAP_START_PROMPT);
+      await clipboard.writeText(buildStudyMapStartPrompt(studyTopic));
       setPromptCopied(true);
       setStatus("Prompt copied");
     } catch {

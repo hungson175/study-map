@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
@@ -17,9 +17,13 @@ import {
 import { ProductShell } from "../product/ProductShell";
 import { RetrofitPanel } from "../RetrofitPanel";
 import { WEBMCP_TOOL_ACTIVITY_EVENT } from "../tool_activity";
+import {
+  DEFAULT_STUDY_TOPIC,
+  setStudyMapTopic,
+} from "../study/study_map_prompt";
 
 const VERSION_B_PROMPT =
-  "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help me study using study-map";
+  "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help guide me to learn about WebMCP as a software developer";
 
 const studyToolNames = [
   "how_to_use",
@@ -135,6 +139,8 @@ const invokeReactHandler = (
 const originalModelContext = (document as Document & { modelContext?: unknown })
   .modelContext;
 
+beforeEach(() => setStudyMapTopic(DEFAULT_STUDY_TOPIC));
+
 afterEach(() => {
   vi.unstubAllGlobals();
   Object.defineProperty(document, "modelContext", {
@@ -144,7 +150,7 @@ afterEach(() => {
 });
 
 describe("Study Map panel", () => {
-  it("shows one honest Version B start card and no source-ingestion controls", async () => {
+  it("shows a topic-aware start card and no source-ingestion controls", async () => {
     const fixture = makeApi();
     render(
       <StudyMapPanel
@@ -161,11 +167,13 @@ describe("Study Map panel", () => {
         "Attach your material in ChatGPT, then paste this message.",
       ),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("textbox", { name: "I want to learn about:" }),
+    ).toHaveValue(DEFAULT_STUDY_TOPIC);
     expect(screen.getByText(VERSION_B_PROMPT)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Copy message" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Study Map" })).toBeTruthy();
     expect(screen.queryByText(/Sol|Terra|Luna/u)).toBeNull();
-    expect(screen.queryByRole("textbox")).toBeNull();
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.queryByText(/Drop a PDF/i)).toBeNull();
     expect(
@@ -178,7 +186,7 @@ describe("Study Map panel", () => {
     ).toBeTruthy();
   });
 
-  it("copies the single canonical attached-paper sentence", async () => {
+  it("updates and copies the prompt from the current topic", async () => {
     window.history.replaceState({}, "", "/study-map/");
     const writeText = vi.fn(async (_value: string) => undefined);
     Object.defineProperty(window.navigator, "clipboard", {
@@ -193,9 +201,20 @@ describe("Study Map panel", () => {
       />,
     );
 
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "I want to learn about:" }),
+      { target: { value: "Vietnamese history" } },
+    );
+    expect(
+      screen.getByText(
+        "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help guide me to learn about Vietnamese history",
+      ),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
-    expect(writeText).toHaveBeenCalledWith(VERSION_B_PROMPT);
+    expect(writeText).toHaveBeenCalledWith(
+      "Use your iab (in-app browser) to open https://hungson175.github.io/study-map/. Call how_to_use first, then help guide me to learn about Vietnamese history",
+    );
     expect(fixture.updateScene).not.toHaveBeenCalled();
     expect(fixture.api.getFiles).not.toHaveBeenCalled();
   });

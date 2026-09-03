@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -11,7 +18,13 @@ import {
 } from "../tool_activity";
 import { createWebMCPRegistration } from "../webmcp_adapter";
 
-import { STUDY_MAP_START_PROMPT } from "./study_map_prompt";
+import {
+  buildStudyMapStartPrompt,
+  getStudyMapTopic,
+  MAX_STUDY_TOPIC_LENGTH,
+  setStudyMapTopic,
+  subscribeToStudyMapTopic,
+} from "./study_map_prompt";
 import "./StudyMapPanel.scss";
 
 type StudyController = ReturnType<typeof createStudyQuestionController>;
@@ -159,6 +172,12 @@ export const StudyMapPanel = ({
   const [question, setQuestion] = useState<QuestionForm | null>(null);
   const [status, setStatus] = useState("Ready to study");
   const [webmcpStatus, setWebmcpStatus] = useState("WebMCP checking…");
+  const studyTopic = useSyncExternalStore(
+    subscribeToStudyMapTopic,
+    getStudyMapTopic,
+    getStudyMapTopic,
+  );
+  const startPrompt = buildStudyMapStartPrompt(studyTopic);
 
   useEffect(() => {
     const ownerDocument = rootRef.current?.ownerDocument;
@@ -251,7 +270,7 @@ export const StudyMapPanel = ({
       return;
     }
     try {
-      await clipboard.writeText(STUDY_MAP_START_PROMPT);
+      await clipboard.writeText(startPrompt);
       setStatus("Study prompt copied");
     } catch {
       setStatus("Copy unavailable — use the prompt shown below");
@@ -390,7 +409,16 @@ export const StudyMapPanel = ({
             <p className="study-map__start-explainer">
               Attach your material in ChatGPT, then paste this message.
             </p>
-            <p className="study-map__start-prompt">{STUDY_MAP_START_PROMPT}</p>
+            <label className="study-map__topic-field">
+              <span>I want to learn about:</span>
+              <input
+                type="text"
+                maxLength={MAX_STUDY_TOPIC_LENGTH}
+                value={studyTopic}
+                onChange={(event) => setStudyMapTopic(event.target.value)}
+              />
+            </label>
+            <p className="study-map__start-prompt">{startPrompt}</p>
             <div className="study-map__welcome-actions">
               <button type="button" onClick={() => void copyTalkPrompt()}>
                 Copy message

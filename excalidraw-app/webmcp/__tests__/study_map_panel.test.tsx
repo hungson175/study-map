@@ -759,7 +759,7 @@ describe("Study Map panel", () => {
       { nodeId: "hang-lang", text: "Mẹ là ai?" },
     );
     expect(screen.getByRole("status")).toHaveTextContent(
-      "answer lands directly",
+      "Question pinned — return to ChatGPT and say “I asked a question on the map.”",
     );
     expect(screen.queryByRole("form", { name: "Ask about node" })).toBeNull();
     expect(

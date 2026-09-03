@@ -371,7 +371,9 @@ export const StudyMapPanel = ({
       setStatus(result.message);
       return;
     }
-    setStatus(`Question ${result.questionId} pinned — answer lands directly`);
+    setStatus(
+      "Question pinned — return to ChatGPT and say “I asked a question on the map.”",
+    );
     setQuestion(null);
   };
 

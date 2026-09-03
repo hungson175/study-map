@@ -493,32 +493,32 @@ export const createStudyQuestionController = (
         : "map";
     const guidance = {
       empty: {
-        next_step: `${AGENT_TOOL_ONLY_RULE} Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Use create_shapes and connect_shapes to draw a small first map, five nodes at most, with short labels, and stop so they can react.`,
+        next_step: `${AGENT_TOOL_ONLY_RULE} If the conversation already names a topic or includes material, do not ask again: acknowledge it, use create_shapes and connect_shapes to draw a 3–5-node map, then pause. Otherwise ask exactly: “What would you like to learn? You can name a topic or attach material here.” After drawing, teach: move/edit a node; select it; click “? Ask about selected node”; type a question; return to ChatGPT with any natural message, for example “I asked a question on the map.” The example is not a command.`,
         say_to_user:
-          "This is Study Map: tell me what you're learning or attach your material here, and I'll draw a small mind map that you can move, edit, undo, and question by hand.",
+          "What would you like to learn? You can name a topic or attach material here.",
       },
       map: {
-        next_step: `${AGENT_TOOL_ONLY_RULE} Call get_chart, give the person a short orientation to the map that is already here, explain that they can change it by hand, and ask what they want to understand or question next.`,
+        next_step: `${AGENT_TOOL_ONLY_RULE} Call get_chart and briefly orient the person. Teach one next move: move/edit a node, or select it, click “? Ask about selected node”, type a question, then return to ChatGPT with any natural message, for example “I asked a question on the map.” The example is not a command. Ask what they want to deepen, question, or add.`,
         say_to_user: answeredTargetLabel
-          ? `I found an existing Study Map with an answer under “${answeredTargetLabel}”; I'll orient you to what's here, then ask what you want to understand, change, or question next.`
-          : "I found an existing Study Map; I'll read it first and give you a quick orientation, then ask what you want to understand, change, or question next.",
+          ? `I found an existing Study Map with an answer under “${answeredTargetLabel}”; I'll orient you to what's here. To ask something new, select a node, click “? Ask about selected node”, type your question, then return here and tell me you asked it.`
+          : "I found an existing Study Map; I'll orient you to what's here. To go deeper, select a node, click “? Ask about selected node”, type your question, then return here and tell me you asked it.",
       },
       waiting: {
-        next_step: `${AGENT_TOOL_ONLY_RULE} Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then call answer_question with one summary, key points, and sources. Do not paste full prose into one node.`,
+        next_step: `${AGENT_TOOL_ONLY_RULE} Call get_chart and list_questions to find the open question and its node. Surface that question, answer it fully in chat, then call answer_question with one summary, key points, and HTTPS sources. Do not paste full prose into one node. Ask for clarification only if the question is ambiguous, or for confirmation only if an external or irreversible action would be required.`,
         say_to_user: openTargetLabel
-          ? `I found your existing map and an open question on “${openTargetLabel}”; I'll orient you to the map first, then we can research it and place the answer under that node.`
-          : "I found an existing map with an open question; I'll orient you to what's here first, then we can research it and place the answer on the map.",
+          ? `I found your open question on “${openTargetLabel}”; I'll answer it here, then add a concise sourced branch under that node.`
+          : "I found an open question on the map; I'll answer it here, then add a concise sourced branch under that node.",
       },
     }[state];
     checkAbort(context.signal);
     return success({
       state,
       what_this_is:
-        "A canvas where you and the person build a map of whatever they are learning. You draw it, they correct it by hand, and their questions live on the map.",
+        "A shared canvas the agent draws and the person edits, questions, and grows while learning.",
       workflow: [
-        "Read material from the conversation.",
-        "Use page tools to draw and read the map.",
-        "Answer in chat, then distill a sourced branch.",
+        "Use existing context, or ask once what the person wants to learn.",
+        "Draw 3–5 nodes, then pause for a human edit or question.",
+        "Answer in chat, add a sourced branch, and repeat.",
       ],
       human_only: ["Pointer and keyboard editing", "Pin questions", "Export"],
       next_step: guidance.next_step,
@@ -1138,7 +1138,7 @@ export const createStudyQuestionController = (
   const descriptors: ToolDescriptor[] = [
     {
       name: "how_to_use",
-      description: `READ ME FIRST. Call this before any other tool every time the page opens. ${AGENT_TOOL_ONLY_RULE}`,
+      description: `READ ME FIRST. Call when the page opens and when the person returns after pinning a question. Guide one step at a time. ${AGENT_TOOL_ONLY_RULE}`,
       inputSchema: toolSchema({}, []),
       annotations: { readOnlyHint: true },
       execute: howToUse,

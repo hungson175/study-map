@@ -304,27 +304,40 @@ describe("Study Map study-question controller", () => {
 
     const emptyGuide = empty as unknown as {
       what_this_is: string;
+      workflow: string[];
       next_step: string;
       say_to_user: string;
     };
     expect(emptyGuide).toMatchObject({
       what_this_is:
-        "A canvas where you and the person build a map of whatever they are learning. You draw it, they correct it by hand, and their questions live on the map.",
-      next_step: `${AGENT_TOOL_ONLY_RULE} Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Use create_shapes and connect_shapes to draw a small first map, five nodes at most, with short labels, and stop so they can react.`,
+        "A shared canvas the agent draws and the person edits, questions, and grows while learning.",
+      workflow: [
+        "Use existing context, or ask once what the person wants to learn.",
+        "Draw 3–5 nodes, then pause for a human edit or question.",
+        "Answer in chat, add a sourced branch, and repeat.",
+      ],
+      next_step: `${AGENT_TOOL_ONLY_RULE} If the conversation already names a topic or includes material, do not ask again: acknowledge it, use create_shapes and connect_shapes to draw a 3–5-node map, then pause. Otherwise ask exactly: “What would you like to learn? You can name a topic or attach material here.” After drawing, teach: move/edit a node; select it; click “? Ask about selected node”; type a question; return to ChatGPT with any natural message, for example “I asked a question on the map.” The example is not a command.`,
       say_to_user:
-        "This is Study Map: tell me what you're learning or attach your material here, and I'll draw a small mind map that you can move, edit, undo, and question by hand.",
+        "What would you like to learn? You can name a topic or attach material here.",
     });
+    expect(emptyGuide.next_step).toMatch(
+      /already names a topic[\s\S]*do not ask again/i,
+    );
+    expect(emptyGuide.next_step).toContain("I asked a question on the map.");
 
     const waitingGuide = waiting as unknown as {
       next_step: string;
       say_to_user: string;
     };
     expect(waitingGuide.next_step).toBe(
-      `${AGENT_TOOL_ONLY_RULE} Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then call answer_question with one summary, key points, and sources. Do not paste full prose into one node.`,
+      `${AGENT_TOOL_ONLY_RULE} Call get_chart and list_questions to find the open question and its node. Surface that question, answer it fully in chat, then call answer_question with one summary, key points, and HTTPS sources. Do not paste full prose into one node. Ask for clarification only if the question is ambiguous, or for confirmation only if an external or irreversible action would be required.`,
     );
     expect(waitingGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
     expect(waitingGuide.say_to_user).toMatch(
-      /orient.*research.*under that node/i,
+      /open question.*answer it here.*sourced branch.*under that node/i,
+    );
+    expect(waitingGuide.next_step).not.toMatch(
+      /ask whether they want|if they do/i,
     );
 
     const mapGuide = map as unknown as {
@@ -332,10 +345,12 @@ describe("Study Map study-question controller", () => {
       say_to_user: string;
     };
     expect(mapGuide.next_step).toBe(
-      `${AGENT_TOOL_ONLY_RULE} Call get_chart, give the person a short orientation to the map that is already here, explain that they can change it by hand, and ask what they want to understand or question next.`,
+      `${AGENT_TOOL_ONLY_RULE} Call get_chart and briefly orient the person. Teach one next move: move/edit a node, or select it, click “? Ask about selected node”, type a question, then return to ChatGPT with any natural message, for example “I asked a question on the map.” The example is not a command. Ask what they want to deepen, question, or add.`,
     );
     expect(mapGuide.say_to_user).toMatch(/existing Study Map/i);
-    expect(mapGuide.say_to_user).toMatch(/orient.*understand.*question next/i);
+    expect(mapGuide.say_to_user).toMatch(
+      /orient.*select a node.*Ask about selected node.*return here/i,
+    );
 
     const answeredGuide = answered as unknown as {
       state: string;
@@ -344,7 +359,7 @@ describe("Study Map study-question controller", () => {
     expect(answeredGuide.state).toBe("map");
     expect(answeredGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
     expect(answeredGuide.say_to_user).toMatch(
-      /orient.*understand.*question next/i,
+      /orient.*select a node.*Ask about selected node.*return here/i,
     );
 
     for (const result of [empty, map, waiting, answered]) {
@@ -367,9 +382,14 @@ describe("Study Map study-question controller", () => {
     }
 
     expect(controller.listTools()[0]).toMatchObject({
-      description: expect.stringContaining(AGENT_TOOL_ONLY_RULE),
+      description: expect.stringMatching(
+        /READ ME FIRST[\s\S]*page opens[\s\S]*returns after pinning a question[\s\S]*step at a time/i,
+      ),
       annotations: { readOnlyHint: true },
     });
+    expect(controller.listTools()[0].description).toContain(
+      AGENT_TOOL_ONLY_RULE,
+    );
     await expect(
       controller.executeTool(
         "how_to_use",

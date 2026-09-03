@@ -7,6 +7,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
+import {
+  AGENT_TOOL_ONLY_RULE,
+  canvasChoiceSessionFor,
+} from "../canvasChoiceSession";
 import { createStudyQuestionController } from "../study_question_controller";
 
 const signal = () => new AbortController().signal;
@@ -107,18 +111,19 @@ describe("Study Map study-question controller", () => {
 
     expect(tools.map(({ name }) => name)).toEqual([
       "how_to_use",
+      "choose_canvas",
       "get_chart",
       "get_selection",
       "list_questions",
       "answer_question",
     ]);
     expect(tools[0]).toMatchObject({
-      description:
-        "READ ME FIRST. Call this before any other tool every time the page opens. Explain Study Map, orient the person to an existing map, and guide the next step from the live canvas state.",
+      description: expect.stringContaining(AGENT_TOOL_ONLY_RULE),
       annotations: { readOnlyHint: true },
     });
     expect(tools.map(({ annotations }) => annotations.readOnlyHint)).toEqual([
       true,
+      false,
       true,
       true,
       true,
@@ -134,7 +139,20 @@ describe("Study Map study-question controller", () => {
         ({ name }) => !/pin|add_question|delete|commit|undo/i.test(name),
       ),
     ).toBe(true);
-    expect(tools[4]).toMatchObject({
+    expect(tools[1]).toMatchObject({
+      description: expect.stringMatching(/explicit answer.*never infer/i),
+      inputSchema: {
+        required: ["choice"],
+        additionalProperties: false,
+        properties: {
+          choice: {
+            type: "string",
+            enum: ["continue_existing", "create_new"],
+          },
+        },
+      },
+    });
+    expect(tools[5]).toMatchObject({
       description:
         "Answer the person fully in chat, then distill the answer into a compact branch from the questioned node — do not paste full prose into the map.",
       inputSchema: {
@@ -208,8 +226,7 @@ describe("Study Map study-question controller", () => {
     expect(emptyGuide).toMatchObject({
       what_this_is:
         "A canvas where you and the person build a map of whatever they are learning. You draw it, they correct it by hand, and their questions live on the map.",
-      next_step:
-        "Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Draw a small first map, five nodes at most, with short labels, and stop so they can react.",
+      next_step: `${AGENT_TOOL_ONLY_RULE} Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Use create_shapes and connect_shapes to draw a small first map, five nodes at most, with short labels, and stop so they can react.`,
       say_to_user:
         "This is Study Map: tell me what you're learning or attach your material here, and I'll draw a small mind map that you can move, edit, undo, and question by hand.",
     });
@@ -219,7 +236,7 @@ describe("Study Map study-question controller", () => {
       say_to_user: string;
     };
     expect(waitingGuide.next_step).toBe(
-      "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then create a small structured branch: one answer summary node plus its key points (and sources if given) as connected children. Do not paste full prose into a single node.",
+      `${AGENT_TOOL_ONLY_RULE} Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then call answer_question with one summary, key points, and sources. Do not paste full prose into one node.`,
     );
     expect(waitingGuide.say_to_user).toContain("Đinh Bộ Lĩnh");
     expect(waitingGuide.say_to_user).toMatch(
@@ -231,7 +248,7 @@ describe("Study Map study-question controller", () => {
       say_to_user: string;
     };
     expect(mapGuide.next_step).toBe(
-      "Call get_chart, give the person a short orientation to the map that is already here, explain that they can drag, edit, delete or undo anything, and ask what they want to understand, change or question next.",
+      `${AGENT_TOOL_ONLY_RULE} Call get_chart, give the person a short orientation to the map that is already here, explain that they can change it by hand, and ask what they want to understand or question next.`,
     );
     expect(mapGuide.say_to_user).toMatch(/existing Study Map/i);
     expect(mapGuide.say_to_user).toMatch(/orient.*understand.*question next/i);
@@ -266,8 +283,7 @@ describe("Study Map study-question controller", () => {
     }
 
     expect(controller.listTools()[0]).toMatchObject({
-      description:
-        "READ ME FIRST. Call this before any other tool every time the page opens. Explain Study Map, orient the person to an existing map, and guide the next step from the live canvas state.",
+      description: expect.stringContaining(AGENT_TOOL_ONLY_RULE),
       annotations: { readOnlyHint: true },
     });
     await expect(
@@ -277,6 +293,40 @@ describe("Study Map study-question controller", () => {
         { signal: signal() },
       ),
     ).resolves.toMatchObject({ ok: false, reason: "invalid_args" });
+    expect(fixture.updateScene).not.toHaveBeenCalled();
+  });
+
+  it("requires a canvas choice for an existing Study Map before any agent write", async () => {
+    const fixture = makeApi(makeElements([node("topic", "Existing topic")]));
+    const session = canvasChoiceSessionFor(fixture.api);
+    const controller = createStudyQuestionController(fixture.api as never, {
+      canvasChoiceSession: session,
+      idFactory: makeIds(),
+    });
+
+    await expect(
+      controller.executeTool("how_to_use", {}, { signal: signal() }),
+    ).resolves.toMatchObject({
+      ok: true,
+      state: "canvas_choice_required",
+      canvas_choice_required: true,
+      choices: ["continue_existing", "create_new"],
+    });
+    await expect(
+      controller.executeTool(
+        "answer_question",
+        {
+          question_id: "missing",
+          answer_summary: "Blocked",
+          key_points: ["Blocked"],
+        },
+        { signal: signal() },
+      ),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "unsafe_retry",
+      message: "Choose a canvas first",
+    });
     expect(fixture.updateScene).not.toHaveBeenCalled();
   });
 

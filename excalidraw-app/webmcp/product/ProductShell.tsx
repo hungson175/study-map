@@ -14,6 +14,7 @@ import {
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
+import { canvasChoiceSessionFor } from "../canvasChoiceSession";
 import {
   WEBMCP_TOOL_ACTIVITY_EVENT,
   type WebMCPToolActivity,
@@ -102,6 +103,7 @@ export const ProductShell = ({
   const rootRef = useRef<HTMLDivElement>(null);
   const metadataRef = useRef<{ id?: string; name: string }>({ name });
   metadataRef.current = { id: currentId, name };
+  const canvasChoiceSession = useMemo(() => canvasChoiceSessionFor(api), [api]);
 
   const go = useCallback((next: ProductView) => {
     const params = new URLSearchParams();
@@ -132,8 +134,9 @@ export const ProductShell = ({
         },
         setStatus,
         showWorkspace: () => go("workspace"),
+        canvasChoiceSession,
       }),
-    [api, go, store],
+    [api, canvasChoiceSession, go, store],
   );
 
   useEffect(() => {

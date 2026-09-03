@@ -6,6 +6,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { createToolRegistry } from "../tool_registry";
 
+import type { CanvasChoiceSession } from "../canvasChoiceSession";
 import type {
   PublicToolDescriptor,
   ToolDescriptor,
@@ -38,6 +39,7 @@ type CanvasToolDependencies = {
   setMetadata: (metadata: CanvasMetadata) => void;
   setStatus: (status: string) => void;
   showWorkspace: () => void;
+  canvasChoiceSession?: CanvasChoiceSession;
 };
 
 const failure = (
@@ -112,6 +114,7 @@ export const createCanvasToolController = ({
   setMetadata,
   setStatus,
   showWorkspace,
+  canvasChoiceSession,
 }: CanvasToolDependencies) => {
   const visibleElements = () =>
     api
@@ -245,6 +248,10 @@ export const createCanvasToolController = ({
 
   const createCanvas: ToolDescriptor["execute"] = async (args, context) => {
     checkAbort(context.signal);
+    const blocked = canvasChoiceSession?.guard("create_canvas");
+    if (blocked) {
+      return blocked;
+    }
     if (!isRecord(args) || !hasOnlyKeys(args, ["name"])) {
       return failure("invalid_args", "Use only name to create a canvas");
     }
@@ -265,6 +272,7 @@ export const createCanvasToolController = ({
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
     setMetadata({ id: undefined, name });
+    canvasChoiceSession?.markCanvasCreated();
     showWorkspace();
     setStatus("New canvas ready");
     return {
@@ -278,6 +286,10 @@ export const createCanvasToolController = ({
 
   const openSavedCanvas: ToolDescriptor["execute"] = async (args, context) => {
     checkAbort(context.signal);
+    const blocked = canvasChoiceSession?.guard("open_saved_canvas");
+    if (blocked) {
+      return blocked;
+    }
     if (
       !isRecord(args) ||
       !hasOnlyKeys(args, ["id"]) ||

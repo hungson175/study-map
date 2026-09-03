@@ -23,6 +23,7 @@ const VERSION_B_PROMPT =
 
 const studyToolNames = [
   "how_to_use",
+  "choose_canvas",
   "get_chart",
   "get_selection",
   "list_questions",
@@ -79,7 +80,9 @@ const makeController = () => ({
         required: [],
         additionalProperties: false,
       },
-      annotations: { readOnlyHint: index < 4 },
+      annotations: {
+        readOnlyHint: [true, false, true, true, true, false][index],
+      },
     })),
   ),
   executeTool: vi.fn(async () => ({ ok: true })),
@@ -299,7 +302,7 @@ describe("Study Map panel", () => {
     expect(fixture.api.getFiles).not.toHaveBeenCalled();
   });
 
-  it("keeps all sixteen sibling tools while how_to_use is attempted first", async () => {
+  it("keeps all seventeen sibling tools while how_to_use is attempted first", async () => {
     const definitions: Array<{ name: string }> = [];
     const signals: AbortSignal[] = [];
     Object.defineProperty(document, "modelContext", {
@@ -367,13 +370,13 @@ describe("Study Map panel", () => {
       "create_canvas",
       "open_saved_canvas",
     ];
-    await waitFor(() => expect(definitions).toHaveLength(16));
-    expect(await screen.findByText("16 tools observed")).toBeTruthy();
+    await waitFor(() => expect(definitions).toHaveLength(17));
+    expect(await screen.findByText("17 tools observed")).toBeTruthy();
     expect(definitions[0].name).toBe("how_to_use");
     expect(new Set(definitions.map(({ name }) => name))).toEqual(
       new Set(expected),
     );
-    expect(new Set(definitions.map(({ name }) => name)).size).toBe(16);
+    expect(new Set(definitions.map(({ name }) => name)).size).toBe(17);
 
     view.unmount();
     expect(signals.every((signal) => signal.aborted)).toBe(true);
@@ -434,9 +437,9 @@ describe("Study Map panel", () => {
 
     expect(await screen.findByText("15 tools observed")).toBeTruthy();
     expect(
-      await screen.findByText("16 tools observed", {}, { timeout: 1000 }),
+      await screen.findByText("17 tools observed", {}, { timeout: 1000 }),
     ).toBeTruthy();
-    expect(definitions).toHaveLength(16);
+    expect(definitions).toHaveLength(17);
     expect(getTools.mock.calls.length).toBeGreaterThanOrEqual(2);
 
     view.unmount();
@@ -458,7 +461,7 @@ describe("Study Map panel", () => {
       />,
     );
 
-    expect(await screen.findByText("5 tools observed")).toBeTruthy();
+    expect(await screen.findByText("6 tools observed")).toBeTruthy();
     expect(getTools).toHaveBeenCalledOnce();
     view.unmount();
     await new Promise((resolve) => setTimeout(resolve, 800));
@@ -521,7 +524,7 @@ describe("Study Map panel", () => {
     expect(writeText).toHaveBeenCalledOnce();
   });
 
-  it("registers only the five study tools through ownerDocument and aborts on unmount", async () => {
+  it("registers only the six study tools through ownerDocument and aborts on unmount", async () => {
     const definitions: Array<{ name: string }> = [];
     const signals: AbortSignal[] = [];
     Object.defineProperty(document, "modelContext", {
@@ -551,7 +554,7 @@ describe("Study Map panel", () => {
       expect(definitions.map(({ name }) => name)).toEqual(studyToolNames),
     );
     expect(definitions[0].name).toBe("how_to_use");
-    expect(await screen.findByText("5 tools observed")).toBeTruthy();
+    expect(await screen.findByText("6 tools observed")).toBeTruthy();
     expect(signals.every((entry) => !entry.aborted)).toBe(true);
 
     view.unmount();
@@ -574,7 +577,7 @@ describe("Study Map panel", () => {
         controller={controller as never}
       />,
     );
-    expect(await screen.findByText("5 tools observed")).toBeTruthy();
+    expect(await screen.findByText("6 tools observed")).toBeTruthy();
     first.unmount();
 
     Object.defineProperty(document, "modelContext", {
@@ -637,7 +640,7 @@ describe("Study Map panel", () => {
     );
 
     expect(await screen.findByText(/WebMCP unavailable/)).toBeTruthy();
-    expect(screen.queryByText("16 tools observed")).toBeNull();
+    expect(screen.queryByText("17 tools observed")).toBeNull();
   });
 
   it("resolves a live target only after trust and submits through the S1 seam", () => {

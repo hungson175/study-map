@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
+import { canvasChoiceSessionFor } from "../canvasChoiceSession";
 import { createStudyQuestionController } from "../study_question_controller";
 import {
   WEBMCP_TOOL_ACTIVITY_EVENT,
@@ -135,9 +136,12 @@ export const StudyMapPanel = ({
   controller: suppliedController,
   initialWelcomeOpen,
 }: StudyMapPanelProps) => {
+  const canvasChoiceSession = useMemo(() => canvasChoiceSessionFor(api), [api]);
   const controller = useMemo(
-    () => suppliedController ?? createStudyQuestionController(api),
-    [api, suppliedController],
+    () =>
+      suppliedController ??
+      createStudyQuestionController(api, { canvasChoiceSession }),
+    [api, canvasChoiceSession, suppliedController],
   );
   const ownsController = !suppliedController;
   const rootRef = useRef<HTMLDivElement>(null);

@@ -25,8 +25,11 @@ import {
   MAX_CREATE_SHAPES,
   parseCreateShapesArgs,
 } from "./create_shapes";
+
 import { computeEvenGaps } from "./distribute_shapes";
 import { createToolRegistry } from "./tool_registry";
+
+import type { CanvasChoiceSession } from "./canvasChoiceSession";
 
 import type { DistributeAxis, DistributeGeometry } from "./distribute_shapes";
 
@@ -230,7 +233,10 @@ export type WriteMode = "staged" | "immediate";
 
 export const createRetrofitController = (
   api: SceneApi,
-  options?: { writeMode?: WriteMode },
+  options?: {
+    writeMode?: WriteMode;
+    canvasChoiceSession?: CanvasChoiceSession;
+  },
 ) => {
   const writeMode = options?.writeMode ?? "staged";
   let snapshot: RetrofitSnapshot = {
@@ -1275,8 +1281,25 @@ export const createRetrofitController = (
 
   return {
     listTools: (): PublicToolDescriptor[] => registry.listTools(),
-    executeTool: (name: string, args: unknown, context: ToolExecutionContext) =>
-      registry.execute(name, args, context),
+    executeTool: (
+      name: string,
+      args: unknown,
+      context: ToolExecutionContext,
+    ) => {
+      if (
+        name === "align_shapes" ||
+        name === "equalize_size" ||
+        name === "distribute_shapes" ||
+        name === "connect_shapes" ||
+        name === "create_shapes"
+      ) {
+        const blocked = options?.canvasChoiceSession?.guard(name);
+        if (blocked) {
+          return Promise.resolve(blocked);
+        }
+      }
+      return registry.execute(name, args, context);
+    },
     getSnapshot: () => cloneSnapshot(snapshot),
     getWriteMode: (): WriteMode => writeMode,
     subscribe: (listener: Listener) => {

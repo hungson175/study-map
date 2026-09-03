@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
+import { canvasChoiceSessionFor } from "./canvasChoiceSession";
 import { createRetrofitController } from "./retrofit_controller";
 import { createWebMCPRegistration } from "./webmcp_adapter";
 import {
@@ -28,9 +29,15 @@ export const RetrofitPanel = ({
   api,
   controller: supplied,
 }: RetrofitPanelProps) => {
+  const canvasChoiceSession = useMemo(() => canvasChoiceSessionFor(api), [api]);
   const controller = useMemo(
-    () => supplied ?? createRetrofitController(api, { writeMode: "immediate" }),
-    [api, supplied],
+    () =>
+      supplied ??
+      createRetrofitController(api, {
+        writeMode: "immediate",
+        canvasChoiceSession,
+      }),
+    [api, canvasChoiceSession, supplied],
   );
   const isImmediate = controller.getWriteMode() === "immediate";
   const rootRef = useRef<HTMLElement>(null);

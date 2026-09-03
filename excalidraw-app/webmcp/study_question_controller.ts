@@ -13,8 +13,10 @@ import type {
 } from "@excalidraw/element/types";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
+import { AGENT_TOOL_ONLY_RULE } from "./canvasChoiceSession";
 import { createToolRegistry, MAX_RESULT_CHARACTERS } from "./tool_registry";
 
+import type { CanvasChoiceSession } from "./canvasChoiceSession";
 import type {
   PublicToolDescriptor,
   ToolDescriptor,
@@ -34,6 +36,10 @@ type SceneApi = Pick<
 
 export type IdFactory = () => string;
 export type HumanGesture = { isTrusted: boolean };
+type StudyQuestionControllerOptions = {
+  canvasChoiceSession?: CanvasChoiceSession;
+  idFactory?: IdFactory;
+};
 
 const STUDY_NODE_TYPES = new Set(["rectangle", "ellipse", "diamond"]);
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -241,8 +247,15 @@ const boxesOverlap = (
 
 export const createStudyQuestionController = (
   api: SceneApi,
-  idFactory: IdFactory = randomId,
+  idFactoryOrOptions: IdFactory | StudyQuestionControllerOptions = randomId,
 ) => {
+  const options =
+    typeof idFactoryOrOptions === "function" ? {} : idFactoryOrOptions;
+  const idFactory =
+    typeof idFactoryOrOptions === "function"
+      ? idFactoryOrOptions
+      : idFactoryOrOptions.idFactory ?? randomId;
+  const canvasChoiceSession = options.canvasChoiceSession;
   const liveElements = () => api.getSceneElements();
   const allElements = () => api.getSceneElementsIncludingDeleted();
 
@@ -268,6 +281,50 @@ export const createStudyQuestionController = (
       return failure("invalid_args", "how_to_use accepts an empty object");
     }
     const elements = liveElements();
+    const hasLiveContent = elements.some(
+      (element) =>
+        !element.isDeleted && collapsedData(element).hiddenBy === null,
+    );
+    const canvasChoiceState = canvasChoiceSession?.begin(hasLiveContent);
+    if (canvasChoiceState === "pending_choice") {
+      return success({
+        state: "canvas_choice_required",
+        canvas_choice_required: true,
+        choices: ["continue_existing", "create_new"],
+        what_this_is:
+          "A shared study canvas that already contains a map. Preserve it until the person chooses what to do.",
+        workflow: [
+          "Read the live map without changing it.",
+          "Ask whether to continue it or create a new Study Map.",
+          "Wait for the explicit answer before any map write.",
+        ],
+        human_only: ["Pointer and keyboard editing", "Pin questions"],
+        next_step: `${AGENT_TOOL_ONLY_RULE} Call get_chart for a short orientation, then ask the person whether to continue_existing or create_new. After their explicit answer, call choose_canvas with that exact choice. Do not infer or change the map first.`,
+        say_to_user:
+          "I found a map already here. Do you want to continue with it, or start a new Study Map? I won't change it until you choose.",
+        tools: [
+          "how_to_use",
+          "choose_canvas",
+          "get_chart",
+          "get_selection",
+          "list_questions",
+          "answer_question",
+        ],
+      });
+    }
+    if (canvasChoiceState === "new_pending_create") {
+      return success({
+        state: "new_canvas_required",
+        canvas_choice_required: false,
+        what_this_is:
+          "A shared study canvas waiting for the chosen new map to be opened.",
+        workflow: ["Preserve the current map, then open a blank one."],
+        human_only: ["Pointer and keyboard editing", "Pin questions"],
+        next_step: `${AGENT_TOOL_ONLY_RULE} The person chose create_new. Call create_canvas now. Do not call any other mutating page tool until it succeeds.`,
+        say_to_user: "I'll preserve this map and open a new Study Map now.",
+        tools: ["how_to_use", "choose_canvas", "create_canvas"],
+      });
+    }
     const nodes = liveStudyNodes(elements);
     const openQuestions = validOpenQuestions(elements);
     const labelsById = new Map(
@@ -299,21 +356,18 @@ export const createStudyQuestionController = (
         : "map";
     const guidance = {
       empty: {
-        next_step:
-          "Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Draw a small first map, five nodes at most, with short labels, and stop so they can react.",
+        next_step: `${AGENT_TOOL_ONLY_RULE} Explain Study Map briefly, then ask what the person is learning. If they attached a paper, article or notes to the conversation, read that material yourself. Use create_shapes and connect_shapes to draw a small first map, five nodes at most, with short labels, and stop so they can react.`,
         say_to_user:
           "This is Study Map: tell me what you're learning or attach your material here, and I'll draw a small mind map that you can move, edit, undo, and question by hand.",
       },
       map: {
-        next_step:
-          "Call get_chart, give the person a short orientation to the map that is already here, explain that they can drag, edit, delete or undo anything, and ask what they want to understand, change or question next.",
+        next_step: `${AGENT_TOOL_ONLY_RULE} Call get_chart, give the person a short orientation to the map that is already here, explain that they can change it by hand, and ask what they want to understand or question next.`,
         say_to_user: answeredTargetLabel
           ? `I found an existing Study Map with an answer under “${answeredTargetLabel}”; I'll orient you to what's here, then ask what you want to understand, change, or question next.`
           : "I found an existing Study Map; I'll read it first and give you a quick orientation, then ask what you want to understand, change, or question next.",
       },
       waiting: {
-        next_step:
-          "Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then create a small structured branch: one answer summary node plus its key points (and sources if given) as connected children. Do not paste full prose into a single node.",
+        next_step: `${AGENT_TOOL_ONLY_RULE} Call get_chart and list_questions, orient the person to the existing map and its open question, then ask whether they want you to research it. If they do, answer in chat first, then call answer_question with one summary, key points, and sources. Do not paste full prose into one node.`,
         say_to_user: openTargetLabel
           ? `I found your existing map and an open question on “${openTargetLabel}”; I'll orient you to the map first, then we can research it and place the answer under that node.`
           : "I found an existing map with an open question; I'll orient you to what's here first, then we can research it and place the answer on the map.",
@@ -325,27 +379,52 @@ export const createStudyQuestionController = (
       what_this_is:
         "A canvas where you and the person build a map of whatever they are learning. You draw it, they correct it by hand, and their questions live on the map.",
       workflow: [
-        "Read the learning material from the conversation, not from this page.",
-        "Draw a small first study map.",
-        "Pin a question mark on any node.",
-        "Answer fully in chat, then distill the answer into connected summary, key-point, and source nodes.",
-        "Drag, edit, delete, or undo it; repeat to grow the mind map.",
+        "Read material from the conversation.",
+        "Use page tools to draw and read the map.",
+        "Answer in chat, then distill a sourced branch.",
       ],
-      human_only: [
-        "Pin or edit a question mark",
-        "Drag or delete elements",
-        "Undo",
-        "Export",
-      ],
+      human_only: ["Pointer and keyboard editing", "Pin questions", "Export"],
       next_step: guidance.next_step,
       say_to_user: guidance.say_to_user,
       tools: [
-        "how_to_use: READ ME FIRST every time this page opens and after the map changes",
-        "get_chart: read the bounded live outline",
-        "get_selection: inspect selected study nodes",
-        "list_questions: find open question marks",
-        "answer_question: distill the full chat answer into a compact branch connected to its questioned node",
+        "how_to_use",
+        "choose_canvas",
+        "get_chart",
+        "get_selection",
+        "list_questions",
+        "answer_question",
       ],
+    });
+  };
+
+  const chooseCanvas: ToolDescriptor["execute"] = async (args, context) => {
+    checkAbort(context.signal);
+    if (
+      !canvasChoiceSession ||
+      !isRecord(args) ||
+      !hasOnlyKeys(args, ["choice"]) ||
+      (args.choice !== "continue_existing" && args.choice !== "create_new")
+    ) {
+      return failure(
+        "invalid_args",
+        "choice must be continue_existing or create_new after the person's explicit answer",
+      );
+    }
+    const hasLiveContent = liveElements().some(
+      (element) =>
+        !element.isDeleted && collapsedData(element).hiddenBy === null,
+    );
+    const chosen = canvasChoiceSession.choose(args.choice, hasLiveContent);
+    if (!chosen.ok) {
+      return chosen;
+    }
+    return success({
+      choice: args.choice,
+      state: chosen.state,
+      next_step:
+        args.choice === "continue_existing"
+          ? "Continue only through registered page tools; do not operate Excalidraw UI controls."
+          : "Call create_canvas next; all other map writes remain blocked until it succeeds.",
     });
   };
 
@@ -822,11 +901,26 @@ export const createStudyQuestionController = (
   const descriptors: ToolDescriptor[] = [
     {
       name: "how_to_use",
-      description:
-        "READ ME FIRST. Call this before any other tool every time the page opens. Explain Study Map, orient the person to an existing map, and guide the next step from the live canvas state.",
+      description: `READ ME FIRST. Call this before any other tool every time the page opens. ${AGENT_TOOL_ONLY_RULE}`,
       inputSchema: toolSchema({}, []),
       annotations: { readOnlyHint: true },
       execute: howToUse,
+    },
+    {
+      name: "choose_canvas",
+      description:
+        "Record the person's explicit answer to continue the existing canvas or create a new one. Ask first and never infer their choice.",
+      inputSchema: toolSchema(
+        {
+          choice: {
+            type: "string",
+            enum: ["continue_existing", "create_new"],
+          },
+        },
+        ["choice"],
+      ),
+      annotations: { readOnlyHint: false },
+      execute: chooseCanvas,
     },
     {
       name: "get_chart",
@@ -1192,7 +1286,15 @@ export const createStudyQuestionController = (
       name: string,
       args: unknown,
       context: ToolExecutionContext,
-    ): Promise<ToolResult> => registry.execute(name, args, context),
+    ): Promise<ToolResult> => {
+      if (name === "answer_question") {
+        const blocked = canvasChoiceSession?.guard(name);
+        if (blocked) {
+          return Promise.resolve(blocked);
+        }
+      }
+      return registry.execute(name, args, context);
+    },
     pinQuestionFromHuman,
     getBranchState,
     collapseBranchFromHuman,

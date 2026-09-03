@@ -2,10 +2,19 @@ import {
   CaptureUpdateAction,
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
+import {
+  BOUND_TEXT_PADDING,
+  FONT_FAMILY,
+  getLineHeight,
+} from "@excalidraw/common";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type {
+  ExcalidrawArrowElement,
+  ExcalidrawElement,
+  ExcalidrawTextElement,
+} from "@excalidraw/element/types";
 
 import {
   AGENT_TOOL_ONLY_RULE,
@@ -69,6 +78,69 @@ const questionElements = (
       customData: { kind: "question", status, nodeId },
     },
   ]);
+
+const rectanglesOverlap = (
+  left: Pick<ExcalidrawElement, "x" | "y" | "width" | "height">,
+  right: Pick<ExcalidrawElement, "x" | "y" | "width" | "height">,
+) =>
+  left.x < right.x + right.width &&
+  left.x + left.width > right.x &&
+  left.y < right.y + right.height &&
+  left.y + left.height > right.y;
+
+const segmentIntersectsRectangleInterior = (
+  start: readonly [number, number],
+  end: readonly [number, number],
+  rectangle: Pick<ExcalidrawElement, "x" | "y" | "width" | "height">,
+) => {
+  const epsilon = 1e-6;
+  const minX = rectangle.x + epsilon;
+  const maxX = rectangle.x + rectangle.width - epsilon;
+  const minY = rectangle.y + epsilon;
+  const maxY = rectangle.y + rectangle.height - epsilon;
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  let low = 0;
+  let high = 1;
+  for (const [p, q] of [
+    [-dx, start[0] - minX],
+    [dx, maxX - start[0]],
+    [-dy, start[1] - minY],
+    [dy, maxY - start[1]],
+  ] as const) {
+    if (Math.abs(p) <= epsilon) {
+      if (q < 0) {
+        return false;
+      }
+      continue;
+    }
+    const ratio = q / p;
+    if (p < 0) {
+      low = Math.max(low, ratio);
+    } else {
+      high = Math.min(high, ratio);
+    }
+    if (low > high) {
+      return false;
+    }
+  }
+  return high >= 0 && low <= 1;
+};
+
+const arrowSegments = (arrow: ExcalidrawArrowElement) => {
+  const points =
+    arrow.points.length >= 2
+      ? arrow.points.map(
+          (point) => [arrow.x + point[0], arrow.y + point[1]] as const,
+        )
+      : ([
+          [arrow.x, arrow.y],
+          [arrow.x + arrow.width, arrow.y + arrow.height],
+        ] as const);
+  return points
+    .slice(0, -1)
+    .map((point, index) => [point, points[index + 1]!] as const);
+};
 
 const makeApi = (initial: ExcalidrawElement[] = []) => {
   let elements = initial;
@@ -159,14 +231,26 @@ describe("Study Map study-question controller", () => {
         required: ["question_id", "answer_summary", "key_points"],
         additionalProperties: false,
         properties: {
-          answer_summary: { type: "string", minLength: 1, maxLength: 180 },
+          answer_summary: { type: "string", minLength: 1, maxLength: 160 },
           key_points: {
             type: "array",
             minItems: 1,
             maxItems: 5,
             uniqueItems: true,
+            items: { type: "string", minLength: 1, maxLength: 72 },
           },
-          sources: { type: "array", maxItems: 2, uniqueItems: true },
+          sources: {
+            type: "array",
+            maxItems: 2,
+            uniqueItems: true,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                title: { type: "string", minLength: 1, maxLength: 64 },
+              },
+            },
+          },
         },
       },
     });
@@ -694,6 +778,259 @@ describe("Study Map study-question controller", () => {
     ).toMatchObject({ ok: true });
   });
 
+  it("sizes the final OpenStax answer text before one-row placement without node or connector overlap", async () => {
+    const fixture = makeApi([
+      ...makeElements([node("dispersion", "3. Dispersion separates colors")]),
+      ...questionElements(
+        "q-dispersion",
+        "qt-dispersion",
+        "dispersion",
+        "Why does dispersion separate white light into different colors?",
+      ),
+    ]);
+    const controller = createStudyQuestionController(
+      fixture.api as never,
+      makeIds("layout"),
+    );
+
+    await expect(
+      controller.executeTool(
+        "answer_question",
+        {
+          question_id: "q-dispersion",
+          answer_summary:
+            "Water’s refractive index varies with wavelength, so each color refracts at a different angle and white light spreads into a spectrum.",
+          key_points: [
+            "White sunlight contains a continuous range of visible wavelengths",
+            "Violet bends more in water; red bends less",
+            "Different refraction angles send the colors along separated paths",
+          ],
+          sources: [
+            {
+              title: "OpenStax — Dispersion: The Rainbow and Prisms",
+              url: "https://openstax.org/books/college-physics-2e/pages/25-5-dispersion-the-rainbow-and-prisms",
+            },
+          ],
+        },
+        { signal: signal() },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      createdNodeCount: 5,
+      createdConnectorCount: 5,
+      appliedElementCount: 15,
+    });
+
+    const answerElements = fixture
+      .getElements()
+      .filter((element) => element.customData?.questionId === "q-dispersion");
+    const answerNodes = answerElements.filter(
+      (element) => element.type === "rectangle",
+    );
+    const answerTexts = answerElements.filter(
+      (element): element is ExcalidrawTextElement => element.type === "text",
+    );
+    const answerArrows = answerElements.filter(
+      (element): element is ExcalidrawArrowElement => element.type === "arrow",
+    );
+    expect(answerNodes).toHaveLength(5);
+    expect(answerTexts).toHaveLength(5);
+    expect(answerArrows).toHaveLength(5);
+
+    const nodeById = new Map(answerNodes.map((node) => [node.id, node]));
+    for (const text of answerTexts) {
+      const container = nodeById.get(text.containerId!);
+      expect(container).toBeDefined();
+      expect(text.fontFamily).toBe(FONT_FAMILY.Assistant);
+      expect(text.fontSize).toBe(16);
+      expect(text.lineHeight).toBe(getLineHeight(FONT_FAMILY.Assistant));
+      expect(text.width + BOUND_TEXT_PADDING * 2).toBeLessThanOrEqual(
+        container!.width + 1e-6,
+      );
+      expect(text.height + BOUND_TEXT_PADDING * 2).toBeLessThanOrEqual(
+        container!.height + 1e-6,
+      );
+      expect(text.x).toBeGreaterThanOrEqual(
+        container!.x + BOUND_TEXT_PADDING - 1e-6,
+      );
+      expect(text.y).toBeGreaterThanOrEqual(
+        container!.y + BOUND_TEXT_PADDING - 1e-6,
+      );
+      expect(text.x + text.width).toBeLessThanOrEqual(
+        container!.x + container!.width - BOUND_TEXT_PADDING + 1e-6,
+      );
+      expect(text.y + text.height).toBeLessThanOrEqual(
+        container!.y + container!.height - BOUND_TEXT_PADDING + 1e-6,
+      );
+    }
+
+    for (let left = 0; left < answerNodes.length; left++) {
+      for (let right = left + 1; right < answerNodes.length; right++) {
+        expect(rectanglesOverlap(answerNodes[left]!, answerNodes[right]!)).toBe(
+          false,
+        );
+      }
+    }
+    const summary = answerNodes.find(
+      (node) => node.customData?.role === "answer_summary",
+    )!;
+    const children = answerNodes
+      .filter((node) => node.id !== summary.id)
+      .sort((left, right) => left.x - right.x);
+    expect(new Set(children.map(({ y }) => y))).toEqual(
+      new Set([children[0]!.y]),
+    );
+    expect(children[0]!.y - (summary.y + summary.height)).toBe(32);
+    for (let index = 1; index < children.length; index++) {
+      expect(
+        children[index]!.x -
+          (children[index - 1]!.x + children[index - 1]!.width),
+      ).toBe(40);
+    }
+
+    for (const arrow of answerArrows) {
+      for (const candidate of answerNodes) {
+        if (
+          candidate.id === arrow.startBinding?.elementId ||
+          candidate.id === arrow.endBinding?.elementId
+        ) {
+          continue;
+        }
+        expect(
+          arrowSegments(arrow).some(([start, end]) =>
+            segmentIntersectsRectangleInterior(start, end, candidate),
+          ),
+        ).toBe(false);
+      }
+    }
+    expect(
+      children.some(
+        (child) => child.x + child.width / 2 < summary.x + summary.width / 2,
+      ),
+    ).toBe(true);
+  });
+
+  it("moves the measured block exactly 64px when an existing connector crosses the first candidate", async () => {
+    const fixture = makeApi([
+      ...makeElements([
+        node("target", "Target", 500, 400),
+        {
+          id: "existing-connector",
+          type: "arrow",
+          x: 888,
+          y: 530,
+          width: -380,
+          height: 0,
+        },
+      ]),
+      ...questionElements("q", "qt", "target", "Why?"),
+    ]);
+    const controller = createStudyQuestionController(
+      fixture.api as never,
+      makeIds("shifted"),
+    );
+
+    await expect(
+      controller.executeTool(
+        "answer_question",
+        {
+          question_id: "q",
+          answer_summary: "A short answer summary",
+          key_points: ["A short key point"],
+        },
+        { signal: signal() },
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fixture.getElements().find(({ id }) => id === "shifted-1")?.y).toBe(
+      568,
+    );
+  });
+
+  it("keeps the resolved question marker outside every created answer node and connector", async () => {
+    const fixture = makeApi(makeElements([node("target", "Target")]));
+    const controller = createStudyQuestionController(
+      fixture.api as never,
+      makeIds("resolved"),
+    );
+    const pinned = controller.pinQuestionFromHuman(
+      { isTrusted: true },
+      { nodeId: "target", text: "Why?" },
+    );
+    expect(pinned).toEqual({ ok: true, questionId: "resolved-1" });
+
+    await expect(
+      controller.executeTool(
+        "answer_question",
+        {
+          question_id: "resolved-1",
+          answer_summary: "A measured answer",
+          key_points: ["A measured key point"],
+        },
+        { signal: signal() },
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    const elements = fixture.getElements();
+    const marker = elements.find(({ id }) => id === "resolved-1")!;
+    const answerNodes = elements.filter(
+      (element) =>
+        element.type === "rectangle" &&
+        element.customData?.questionId === "resolved-1",
+    );
+    const answerArrows = elements.filter(
+      (element): element is ExcalidrawArrowElement =>
+        element.type === "arrow" &&
+        element.customData?.questionId === "resolved-1",
+    );
+    expect(
+      answerNodes.every((answerNode) => rectanglesOverlap(answerNode, marker)),
+    ).toBe(false);
+    for (const answerNode of answerNodes) {
+      expect(rectanglesOverlap(answerNode, marker)).toBe(false);
+    }
+    for (const arrow of answerArrows) {
+      expect(
+        arrowSegments(arrow).some((segment) =>
+          segmentIntersectsRectangleInterior(segment[0], segment[1], marker),
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it("fails before writing when all thirteen measured answer positions are occupied", async () => {
+    const fixture = makeApi([
+      ...makeElements([
+        node("target", "Target", 500, 400),
+        {
+          id: "vertical-blocker",
+          type: "rectangle",
+          x: 508,
+          y: 504,
+          width: 380,
+          height: 13 * 64,
+        },
+      ]),
+      ...questionElements("q", "qt", "target", "Why?"),
+    ]);
+    const controller = createStudyQuestionController(
+      fixture.api as never,
+      makeIds("blocked"),
+    );
+
+    await expect(
+      controller.executeTool(
+        "answer_question",
+        {
+          question_id: "q",
+          answer_summary: "A short answer summary",
+          key_points: ["A short key point"],
+        },
+        { signal: signal() },
+      ),
+    ).resolves.toMatchObject({ ok: false, reason: "unsafe_retry" });
+    expect(fixture.updateScene).not.toHaveBeenCalled();
+  });
+
   it("collapses and expands an exclusive branch while preserving shared nodes and manual deletes", async () => {
     const graph = makeElements([
       node("root", "Root", 0, 0),
@@ -1104,8 +1441,19 @@ describe("Study Map study-question controller", () => {
       { question_id: "q", answer_summary: "", key_points: ["Point"] },
       {
         question_id: "q",
-        answer_summary: "A".repeat(181),
+        answer_summary: "A".repeat(161),
         key_points: ["Point"],
+      },
+      {
+        question_id: "q",
+        answer_summary: "A",
+        key_points: ["K".repeat(73)],
+      },
+      {
+        question_id: "q",
+        answer_summary: "A",
+        key_points: ["Point"],
+        sources: [{ title: "S".repeat(65), url: "https://example.org/source" }],
       },
       {
         question_id: "q",

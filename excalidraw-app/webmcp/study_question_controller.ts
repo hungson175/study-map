@@ -2,8 +2,14 @@ import {
   CaptureUpdateAction,
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
-import { randomId } from "@excalidraw/common";
-import { newElementWith } from "@excalidraw/element";
+import {
+  BOUND_TEXT_PADDING,
+  FONT_FAMILY,
+  getFontString,
+  getLineHeight,
+  randomId,
+} from "@excalidraw/common";
+import { measureText, newElementWith, wrapText } from "@excalidraw/element";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element";
 import type {
@@ -49,11 +55,29 @@ const MAX_SELECTED = 12;
 const MAX_QUESTIONS = 20;
 const MAX_OPEN_PER_NODE = 8;
 const MAX_LINE = 120;
-const MAX_ANSWER_SUMMARY = 180;
-const MAX_KEY_POINT = 100;
+const MAX_ANSWER_SUMMARY = 160;
+const MAX_KEY_POINT = 72;
 const MAX_KEY_POINTS = 5;
-const MAX_SOURCE_TITLE = 80;
+const MAX_SOURCE_TITLE = 64;
 const MAX_SOURCES = 2;
+const ANSWER_FONT_FAMILY = FONT_FAMILY.Assistant;
+const ANSWER_FONT_SIZE = 16;
+const ANSWER_LINE_HEIGHT = getLineHeight(ANSWER_FONT_FAMILY);
+const ANSWER_FONT = getFontString({
+  fontFamily: ANSWER_FONT_FAMILY,
+  fontSize: ANSWER_FONT_SIZE,
+});
+const ANSWER_HORIZONTAL_PADDING = 12;
+const SUMMARY_MIN_WIDTH = 240;
+const SUMMARY_MAX_WIDTH = 380;
+const SUMMARY_MIN_HEIGHT = 60;
+const CHILD_MIN_WIDTH = 160;
+const CHILD_MAX_WIDTH = 260;
+const CHILD_MIN_HEIGHT = 48;
+const CHILD_HORIZONTAL_GAP = 40;
+const CHILD_VERTICAL_GAP = 32;
+const PLACEMENT_STEP = 64;
+const MAX_PLACEMENT_STEP = 12;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -244,6 +268,119 @@ const boxesOverlap = (
   left.x + left.width > right.x &&
   left.y < right.y + right.height &&
   left.y + left.height > right.y;
+
+type AnswerRole = "answer_summary" | "key_point" | "source";
+type AnswerBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+type AnswerTextLayout = {
+  text: string;
+  width: number;
+  height: number;
+  textWidth: number;
+  textHeight: number;
+};
+type Segment = readonly [readonly [number, number], readonly [number, number]];
+
+const clamp = (value: number, minimum: number, maximum: number) =>
+  Math.min(maximum, Math.max(minimum, value));
+
+const measureAnswerText = (
+  role: AnswerRole,
+  label: string,
+): AnswerTextLayout => {
+  const minimumWidth =
+    role === "answer_summary" ? SUMMARY_MIN_WIDTH : CHILD_MIN_WIDTH;
+  const maximumWidth =
+    role === "answer_summary" ? SUMMARY_MAX_WIDTH : CHILD_MAX_WIDTH;
+  const minimumHeight =
+    role === "answer_summary" ? SUMMARY_MIN_HEIGHT : CHILD_MIN_HEIGHT;
+  const unwrapped = measureText(label, ANSWER_FONT, ANSWER_LINE_HEIGHT);
+  const width = Math.ceil(
+    clamp(
+      unwrapped.width + ANSWER_HORIZONTAL_PADDING * 2,
+      minimumWidth,
+      maximumWidth,
+    ),
+  );
+  const text = wrapText(
+    label,
+    ANSWER_FONT,
+    width - ANSWER_HORIZONTAL_PADDING * 2,
+  );
+  const measured = measureText(text, ANSWER_FONT, ANSWER_LINE_HEIGHT);
+  return {
+    text,
+    width,
+    height: Math.max(
+      minimumHeight,
+      Math.ceil(measured.height + BOUND_TEXT_PADDING * 2),
+    ),
+    textWidth: measured.width,
+    textHeight: measured.height,
+  };
+};
+
+const normalizedBox = (element: AnswerBox): AnswerBox => ({
+  x: Math.min(element.x, element.x + element.width),
+  y: Math.min(element.y, element.y + element.height),
+  width: Math.abs(element.width),
+  height: Math.abs(element.height),
+});
+
+const segmentIntersectsBoxInterior = (
+  [start, end]: Segment,
+  rawBox: AnswerBox,
+) => {
+  const box = normalizedBox(rawBox);
+  const epsilon = 1e-6;
+  const minX = box.x + epsilon;
+  const maxX = box.x + box.width - epsilon;
+  const minY = box.y + epsilon;
+  const maxY = box.y + box.height - epsilon;
+  if (minX >= maxX || minY >= maxY) {
+    return false;
+  }
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  let low = 0;
+  let high = 1;
+  for (const [p, q] of [
+    [-dx, start[0] - minX],
+    [dx, maxX - start[0]],
+    [-dy, start[1] - minY],
+    [dy, maxY - start[1]],
+  ] as const) {
+    if (Math.abs(p) <= epsilon) {
+      if (q < 0) {
+        return false;
+      }
+      continue;
+    }
+    const ratio = q / p;
+    if (p < 0) {
+      low = Math.max(low, ratio);
+    } else {
+      high = Math.min(high, ratio);
+    }
+    if (low > high) {
+      return false;
+    }
+  }
+  return high >= 0 && low <= 1;
+};
+
+const arrowSegments = (arrow: ExcalidrawArrowElement): Segment[] => {
+  const points = arrow.points.map(
+    (point) => [arrow.x + point[0], arrow.y + point[1]] as const,
+  );
+  return points
+    .slice(0, -1)
+    .map((point, index) => [point, points[index + 1]!] as const);
+};
 
 export const createStudyQuestionController = (
   api: SceneApi,
@@ -701,6 +838,7 @@ export const createStudyQuestionController = (
     const unavailable = new Set(elements.map(({ id }) => id));
     const allocated = nodeInputs.map((input) => ({
       ...input,
+      layout: measureAnswerText(input.role as AnswerRole, input.label),
       nodeId: nextUniqueId(idFactory, unavailable),
       textId: nextUniqueId(idFactory, unavailable),
       arrowId: nextUniqueId(idFactory, unavailable),
@@ -719,38 +857,108 @@ export const createStudyQuestionController = (
       textId: string;
       arrowId: string;
     };
-    const summaryWidth = 320;
-    const summaryHeight = 84;
-    const childWidth = 240;
-    const childHeight = 72;
-    const x = target.x + 8;
+    const summaryX = target.x + 8;
+    const children = allocated.slice(1);
+    const childrenWidth =
+      children.reduce((total, item) => total + item.layout.width, 0) +
+      Math.max(0, children.length - 1) * CHILD_HORIZONTAL_GAP;
+    const childrenX = summaryX + summary.layout.width / 2 - childrenWidth / 2;
     const ignoredIds = new Set([
       target.id,
-      marker.id,
-      question.element.id,
-      ...(target.boundElements?.map(({ id }) => id) ?? []),
+      ...(target.boundElements
+        ?.filter(({ type }) => type === "text")
+        .map(({ id }) => id) ?? []),
     ]);
-    let summaryY: number | null = null;
-    const layoutBoxes = (candidateY: number) => [
-      { x, y: candidateY, width: summaryWidth, height: summaryHeight },
-      ...allocated.slice(1).map((_, index) => ({
-        x: x + (index % 2) * (childWidth + 40),
-        y: candidateY + summaryHeight + 24 + Math.floor(index / 2) * 96,
-        width: childWidth,
-        height: childHeight,
-      })),
-    ];
-    for (let step = 0; step <= 12; step++) {
-      const candidateY = target.y + target.height + 24 + step * 48;
-      const boxes = layoutBoxes(candidateY);
+    const visible = live.filter(
+      (element) => collapsedData(element).hiddenBy === null,
+    );
+    const existingBoxes = visible
+      .filter(
+        (element) => !ignoredIds.has(element.id) && element.type !== "arrow",
+      )
+      .map(normalizedBox);
+    const existingConnectorSegments = visible
+      .filter(
+        (element) => !ignoredIds.has(element.id) && element.type === "arrow",
+      )
+      .flatMap((element) =>
+        arrowSegments(element as unknown as ExcalidrawArrowElement),
+      );
+
+    const positionLayout = (candidateY: number) => {
+      let nextChildX = childrenX;
+      return allocated.map((item, index) => {
+        const positioned = {
+          ...item,
+          x: index === 0 ? summaryX : nextChildX,
+          y:
+            index === 0
+              ? candidateY
+              : candidateY + summary.layout.height + CHILD_VERTICAL_GAP,
+          width: item.layout.width,
+          height: item.layout.height,
+        };
+        if (index > 0) {
+          nextChildX += item.layout.width + CHILD_HORIZONTAL_GAP;
+        }
+        return positioned;
+      });
+    };
+    const connectorSegmentsFor = (
+      positioned: ReturnType<typeof positionLayout>,
+    ): Segment[] => {
+      const positionedSummary = positioned[0]!;
+      return positioned.map((item, index) => {
+        const start =
+          index === 0
+            ? ([target.x + target.width / 2, target.y + target.height] as const)
+            : ([
+                positionedSummary.x + positionedSummary.width / 2,
+                positionedSummary.y + positionedSummary.height,
+              ] as const);
+        const end = [item.x + item.width / 2, item.y] as const;
+        return [start, end] as const;
+      });
+    };
+    const positionIsSafe = (positioned: ReturnType<typeof positionLayout>) => {
+      const boxes = positioned.map(normalizedBox);
       if (
-        !live.some(
-          (element) =>
-            !ignoredIds.has(element.id) &&
-            element.type !== "arrow" &&
-            boxes.some((box) => boxesOverlap(box, element)),
+        boxes.some((box) =>
+          existingBoxes.some((existing) => boxesOverlap(box, existing)),
+        ) ||
+        boxes.some((box) =>
+          existingConnectorSegments.some((segment) =>
+            segmentIntersectsBoxInterior(segment, box),
+          ),
         )
       ) {
+        return false;
+      }
+      const plannedConnectors = connectorSegmentsFor(positioned);
+      if (
+        plannedConnectors.some((segment) =>
+          existingBoxes.some((box) =>
+            segmentIntersectsBoxInterior(segment, box),
+          ),
+        )
+      ) {
+        return false;
+      }
+      return plannedConnectors.every((segment, connectorIndex) =>
+        boxes.every(
+          (box, boxIndex) =>
+            boxIndex === connectorIndex ||
+            (connectorIndex > 0 && boxIndex === 0) ||
+            !segmentIntersectsBoxInterior(segment, box),
+        ),
+      );
+    };
+
+    let summaryY: number | null = null;
+    for (let step = 0; step <= MAX_PLACEMENT_STEP; step++) {
+      const candidateY =
+        target.y + target.height + CHILD_VERTICAL_GAP + step * PLACEMENT_STEP;
+      if (positionIsSafe(positionLayout(candidateY))) {
         summaryY = candidateY;
         break;
       }
@@ -758,21 +966,20 @@ export const createStudyQuestionController = (
     if (summaryY === null) {
       return failure("unsafe_retry", "No safe answer placement was available");
     }
+    const positioned = positionLayout(summaryY);
 
     const skeletons: ExcalidrawElementSkeleton[] = [
       structuredClone(target) as ExcalidrawElementSkeleton,
     ];
-    allocated.forEach((item, index) => {
+    positioned.forEach((item, index) => {
       const nodeId = item.nodeId!;
       const textId = item.textId!;
       const arrowId = item.arrowId!;
       const isSummary = index === 0;
-      const nodeX = isSummary ? x : x + ((index - 1) % 2) * (childWidth + 40);
-      const nodeY = isSummary
-        ? summaryY!
-        : summaryY! + summaryHeight + 24 + Math.floor((index - 1) / 2) * 96;
-      const width = isSummary ? summaryWidth : childWidth;
-      const height = isSummary ? summaryHeight : childHeight;
+      const nodeX = item.x;
+      const nodeY = item.y;
+      const width = item.width;
+      const height = item.height;
       const parentId = isSummary ? target.id : summary.nodeId;
       const customData = {
         kind: "answer",
@@ -791,36 +998,40 @@ export const createStudyQuestionController = (
           width,
           height,
           backgroundColor: item.role === "source" ? "#d0ebff" : "#fff3bf",
-          boundElements: [
-            { id: textId, type: "text" },
-            { id: arrowId, type: "arrow" },
-          ],
+          boundElements: [{ id: arrowId, type: "arrow" }],
+          label: {
+            id: textId,
+            text: item.layout.text,
+            fontFamily: ANSWER_FONT_FAMILY,
+            fontSize: ANSWER_FONT_SIZE,
+            lineHeight: ANSWER_LINE_HEIGHT,
+            customData,
+          },
           ...(item.role === "source" && "url" in item
             ? { link: item.url }
             : {}),
           customData,
-        },
-        {
-          id: textId,
-          type: "text",
-          x: nodeX + 12,
-          y: nodeY + 12,
-          text: item.label,
-          containerId: nodeId,
-          customData,
-        },
+        } as ExcalidrawElementSkeleton,
         {
           id: arrowId,
           type: "arrow",
-          x: isSummary ? target.x + target.width / 2 : x + summaryWidth / 2,
-          y: isSummary ? target.y + target.height : summaryY! + summaryHeight,
+          x: isSummary
+            ? target.x + target.width / 2
+            : positioned[0]!.x + positioned[0]!.width / 2,
+          y: isSummary
+            ? target.y + target.height
+            : positioned[0]!.y + positioned[0]!.height,
           width:
             nodeX +
             width / 2 -
-            (isSummary ? target.x + target.width / 2 : x + summaryWidth / 2),
+            (isSummary
+              ? target.x + target.width / 2
+              : positioned[0]!.x + positioned[0]!.width / 2),
           height:
             nodeY -
-            (isSummary ? target.y + target.height : summaryY! + summaryHeight),
+            (isSummary
+              ? target.y + target.height
+              : positioned[0]!.y + positioned[0]!.height),
           start: { id: parentId },
           end: { id: nodeId },
           customData,
@@ -849,12 +1060,38 @@ export const createStudyQuestionController = (
         arrow.endBinding?.elementId === nodeId
       );
     });
+    const validTextLayout = positioned.every((item) => {
+      const node = convertedById.get(item.nodeId!);
+      const text = convertedById.get(item.textId!);
+      return (
+        node?.type === "rectangle" &&
+        text?.type === "text" &&
+        text.containerId === node.id &&
+        node.width === item.width &&
+        node.height === item.height &&
+        Number.isFinite(text.x) &&
+        Number.isFinite(text.y) &&
+        Number.isFinite(text.width) &&
+        Number.isFinite(text.height) &&
+        text.width + BOUND_TEXT_PADDING * 2 <= node.width + 1e-6 &&
+        text.height + BOUND_TEXT_PADDING * 2 <= node.height + 1e-6 &&
+        text.x >= node.x + BOUND_TEXT_PADDING - 1e-6 &&
+        text.y >= node.y + BOUND_TEXT_PADDING - 1e-6 &&
+        text.x + text.width <=
+          node.x + node.width - BOUND_TEXT_PADDING + 1e-6 &&
+        text.y + text.height <= node.y + node.height - BOUND_TEXT_PADDING + 1e-6
+      );
+    });
     if (
       !convertedTarget ||
       created.some((element) => !element) ||
-      !validBindings
+      !validBindings ||
+      !validTextLayout
     ) {
-      return failure("unsafe_retry", "Answer bindings could not be verified");
+      return failure(
+        "unsafe_retry",
+        "Answer bindings and text layout could not be verified",
+      );
     }
     checkAbort(context.signal);
 

@@ -62,8 +62,8 @@ module.exports.woff2BrowserPlugin = () => {
         return code.replace(
           "<!-- PLACEHOLDER:EXCALIDRAW_APP_FONTS -->",
           `<script>
-        // Study Map is deployed below this GitHub Pages project path.
-        window.EXCALIDRAW_ASSET_PATH = "/study-map/";
+        // Vite already prefixes emitted font URIs with the Study Map project path.
+        window.EXCALIDRAW_ASSET_PATH = window.origin + "/";
       </script>
 
       <!-- Preload all default fonts to avoid swap on init -->

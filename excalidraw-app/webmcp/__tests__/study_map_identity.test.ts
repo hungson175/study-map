@@ -48,7 +48,10 @@ describe("Study Map public identity", () => {
     ];
 
     expect(html).toContain(
-      'window.EXCALIDRAW_ASSET_PATH = window.origin + "/study-map/"',
+      'window.EXCALIDRAW_ASSET_PATH = window.origin + "/"',
+    );
+    expect(fontPlugin).toContain(
+      'window.EXCALIDRAW_ASSET_PATH = window.origin + "/"',
     );
     expect(fontPlugin).toContain(
       'const LOCAL_FONTS_BASE = "/study-map/fonts/"',
@@ -59,6 +62,31 @@ describe("Study Map public identity", () => {
     for (const file of assistantFiles) {
       expect(fontPlugin).toContain(`url(./Assistant/${file})`);
     }
+
+    const origin = "https://hungson175.github.io";
+    const resolveDynamicFont = (base: string, uri: string) => {
+      let normalizedBase = base;
+      if (/^\.?\//.test(normalizedBase)) {
+        normalizedBase = new URL(
+          normalizedBase.replace(/^\.?\/+/, ""),
+          origin,
+        ).toString();
+      }
+      normalizedBase = `${normalizedBase.replace(/\/+$/, "")}/`;
+      const assetUrl = uri.replace(/^\/+/, "");
+      return new URL(assetUrl, normalizedBase).toString();
+    };
+    const emittedFontUri = "/study-map/fonts/Excalifont/example.woff2";
+    const expected =
+      "https://hungson175.github.io/study-map/fonts/Excalifont/example.woff2";
+
+    expect(resolveDynamicFont(`${origin}/`, emittedFontUri)).toBe(expected);
+    expect(
+      resolveDynamicFont(`${origin}/study-map/`, emittedFontUri),
+    ).toContain("/study-map/study-map/");
+    expect(
+      resolveDynamicFont(`${origin}/`, "/fonts/Excalifont/example.woff2"),
+    ).not.toBe(expected);
   });
 
   it("documents the exact origin-scoped M2 native proof", () => {
